@@ -118,6 +118,46 @@ export class PaymentLogs {
 
 export const PaymentLogsSchema = SchemaFactory.createForClass(PaymentLogs);
 
+
+export class Transaction {
+  @Prop()
+  timestamp: Date;
+
+  @Prop()
+  paymentId: string;
+
+  @Prop()
+  amount: number;
+
+  @Prop()
+  appliedLimit: number;
+
+  @Prop()
+  chargeableAmount: number;
+}
+
+@Schema({ timestamps: true })
+export class MerchantDailyData {
+  @Prop()
+  merchantId: string;
+
+  @Prop()
+  date: string;
+
+  @Prop({ type: [Transaction] })
+  transactions: Transaction[];
+
+  @Prop()
+  totalAmount: number;
+
+  @Prop()
+  limitApplied: boolean;
+
+  @Prop()
+  remainingBalance: number;
+}
+
+
 @Schema({ timestamps: true })
 export class Log {
   @Prop({ type: RawApiLogDataSchema })
@@ -134,6 +174,18 @@ export class Log {
 
   @Prop()
   type: string;
+
+  @Prop()
+  api_hub_fee: number;
+
+  @Prop()
+  calculatedFee: number;
+
+  @Prop()
+  applicableFee: number;
+
+  @Prop({ type: [MerchantDailyData] })
+  result: MerchantDailyData[];
 }
 
 export const LogSchema = SchemaFactory.createForClass(Log);

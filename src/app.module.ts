@@ -8,7 +8,7 @@ import { UploadModule } from './upload/upload.module';
 
 @Module({
   imports: [
-    MongooseModule.forRoot('mongodb://localhost:27017/Billing',), AuthModule, ProfileModule, UploadModule],
+    MongooseModule.forRoot('mongodb://localhost:27017/billing',), AuthModule, ProfileModule, UploadModule],
   controllers: [AppController],
   providers: [AppService],
 })

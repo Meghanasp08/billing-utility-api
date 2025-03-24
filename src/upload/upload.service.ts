@@ -110,8 +110,8 @@ export class UploadService {
     const groupFile = await this.setGroup(chargeFile);
     const feeApplied = await this.calculateFee(groupFile);
     // console.log('iam applied fee', feeApplied)
-    // const billData = await this.logModel.insertMany(groupFile);
-    return feeApplied;
+    const billData = await this.logModel.insertMany(feeApplied);
+    return billData;
   }
 
   async calculateFee(data: any) {
@@ -169,6 +169,7 @@ export class UploadService {
 
               const merchantData = merchantDailyData[key];
 
+
               let appliedLimit = 0;
 
               // Apply the 200 AED limit per day
@@ -187,6 +188,7 @@ export class UploadService {
                   appliedLimit,
                   chargeableAmount: amount - appliedLimit, // Remaining chargeable amount after limit
                 });
+
               }
 
               merchantData.totalAmount += amount; // Add the total amount of the day for the merchant
@@ -198,7 +200,7 @@ export class UploadService {
               return filterData.paymentId == record["payment_logs.payment_id"]
             }) : [];
             calculatedFee = filteredData[0].chargeableAmount * 0.0038;
-            applicableFee = calculatedFee > 50 ? 50 : calculatedFee;
+            applicableFee = parseInt(record["payment_logs.amount"]) > 20000 ? 50 : calculatedFee;
           }
         }
 

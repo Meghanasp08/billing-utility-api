@@ -8,18 +8,18 @@ import { UploadService } from './upload.service';
 
 @Module({
   imports: [MongooseModule.forFeature([{ name: Log.name, schema: LogSchema }]),
-    MulterModule.register({
-      storage: diskStorage({
-          destination: './uploads',
-          filename: (req, file, cb) => {
-              const uniqueName = `${Date.now()}-${file.originalname}`;
-              cb(null, uniqueName);
-          },
-      }),
+  MulterModule.register({
+    storage: diskStorage({
+      destination: './uploads',
+      filename: (req, file, cb) => {
+        const uniqueName = `${Date.now()}-${file.originalname}`;
+        cb(null, uniqueName);
+      },
+    }),
   }),
   ],
   controllers: [UploadController],
   providers: [UploadService],
   exports: [UploadService],
 })
-export class UploadModule {}
+export class UploadModule { }
