@@ -139,19 +139,23 @@ export class UploadService {
       let applicableFee = 0;
       let result: any[] = [];
 
-      if (record.group == "payment-bulk" || record.group == "payment-non-bulk") {
+      if (record.group == "payment-bulk" && record['raw_api_log_data.is_large_corporate'] == 'TRUE') {
+        calculatedFee = 250;
+        applicableFee = calculatedFee;
+
+      } else {
 
         //MERCHANT CALCULATION
 
-        if (record.type == "merchant" && record["raw_api_log_data.is_large_corporate"] != null) {
+        if (record.type == "merchant" && record["raw_api_log_data.isLargeValueCollection"] != null) {
 
           // For Large Corporate merchants
-          if (record["raw_api_log_data.is_large_corporate"] == "TRUE") {
+          if (record["raw_api_log_data.isLargeValueCollection"] == "TRUE") {
             calculatedFee = parseInt(record["payment_logs.amount"]) * 0.0038;
             applicableFee = calculatedFee > 4 ? 4 : calculatedFee;
           }
           // For Non-Large Corporate merchants, apply the 200 AED deduction per day and merchant
-          else if (record["raw_api_log_data.is_large_corporate"] == "FALSE") {
+          else if (record["raw_api_log_data.isLargeValueCollection"] == "FALSE") {
 
             const merchantDailyData: Record<string, any> = {};
 
@@ -226,11 +230,11 @@ export class UploadService {
         //PEER-2-PEER CALCULATION
 
         else if (record.type == 'peer-2-peer') {
-          if (record["raw_api_log_data.is_large_corporate"] == "TRUE") {
+          if (record["raw_api_log_data.isLargeValueCollection"] == "TRUE") {
             calculatedFee = parseInt(record["payment_logs.amount"]) * 0.0038;
             applicableFee = calculatedFee > 4 ? 4 : calculatedFee;
           }
-          else if (record["raw_api_log_data.is_large_corporate"] == "FALSE") {
+          else if (record["raw_api_log_data.isLargeValueCollection"] == "FALSE") {
             calculatedFee = 25;
             applicableFee = calculatedFee;
           }
@@ -246,11 +250,13 @@ export class UploadService {
         //OTHER CALCULATION
 
         else {
-          if (record.group == "payment-bulk") {
+          if (record.type == 'other') {
+            if (record.group == 'insurance') {
+              calculatedFee = 0;
+              applicableFee = calculatedFee;
+            } else { }
             calculatedFee = 250;
             applicableFee = calculatedFee;
-          } else {
-            // TO DO
           }
         }
       }
@@ -303,8 +309,7 @@ export class UploadService {
     let group = "other";
     let type = "NA"
     return mergedData.map(logEntry => {
-      if (logEntry["payment_logs.number_of_successful_transactions"] != null && logEntry["raw_api_log_data.url"].split("/").pop() == "file-payments" && logEntry['raw_api_log_data.is_large_corporate'] == true
-        // && logEntry['payment_logs.is_large_corporate'] == true
+      if (logEntry["payment_logs.number_of_successful_transactions"] != null && logEntry["raw_api_log_data.url"].split("/").pop() == "file-payments" && logEntry['raw_api_log_data.isLargeValueCollection'] == true
       ) { // Payments (bulk) - Need to add the condition to check if the payment is fully settled
         group = "payment-bulk";
         type = this.getType(logEntry);
