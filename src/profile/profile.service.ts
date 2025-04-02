@@ -18,4 +18,50 @@ export class ProfileService {
     return log;
   }
 
+  async getBillingData() {
+    try {
+      const aggregateQuery = [
+        {
+          $group: {
+            _id: "$raw_api_log_data.tpp_id",
+            total_api_hub_fee: { $sum: "$api_hub_fee" },
+            total_calculated_fee: { $sum: "$calculatedFee" },
+            total_applicable_fee: { $sum: "$applicableFee" }
+          }
+        }
+      ];
+
+      const result = await this.logModel.aggregate(aggregateQuery).exec();
+      return result;
+    } catch (error) {
+      console.error("Error fetching billing data:", error);
+      throw new Error("Failed to fetch billing data");
+    }
+  }
+
+  async getBillingDetails(id: string) {
+    try {
+      const aggregateQuery = [
+        {
+          $match: {
+            "raw_api_log_data.tpp_id": id
+          }
+        },
+        {
+          $group: {
+            _id: "$raw_api_log_data.lfi_id",
+            total_api_hub_fee: { $sum: "$api_hub_fee" },
+            total_applicable_fee: { $sum: "$applicableFee" }
+          }
+        }
+      ]
+
+      const result = await this.logModel.aggregate(aggregateQuery).exec();
+      return result;
+    } catch (error) {
+      console.error("Error fetching billing details:", error);
+      throw new Error("Failed to fetch billing details");
+    }
+  }
+
 }

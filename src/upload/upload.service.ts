@@ -112,8 +112,9 @@ export class UploadService {
     const chargeFile = await this.chargableConvertion(mergedData);
     const groupFile = await this.setGroup(chargeFile);
     const feeApplied = await this.calculateFee(groupFile);
+    const pagesFeeApplied = await this.feeCalculatoionForLfi(feeApplied);
     // console.log('iam applied fee', feeApplied)
-    const billData = await this.logModel.insertMany(feeApplied);
+    const billData = await this.logModel.insertMany(pagesFeeApplied);
     return billData;
   }
 
@@ -136,6 +137,35 @@ export class UploadService {
     const insertedData = await LfiDataModel.insertMany(lfiDataToInsert);
     return insertedData;
   }
+
+  async feeCalculatoionForLfi(data: any) {
+
+    let lfiResults: any[] = [];
+
+    const lfiDataMap = data.map(async (record: { [x: string]: string; }) => {
+      if (record.group == 'data' && record.type == 'other') {
+
+        const lfiData = await this.populateLfiData(data);
+
+        let margin = record["raw_api_log_data.is_attended"] == 'true' ? 15 : record["raw_api_log_data.is_attended"] == 'false' ? 5 : 0;
+        if (margin === 0) {
+          throw new Error("Margin cannot be 0. Invalid value for 'is_attended'.");
+        }
+        if (record["raw_api_log_data.is_attended"] == 'true') {
+          lfiResults = await this.calculateLfiCharges(data, record, margin);
+        } else if (record["raw_api_log_data.is_attended"] == 'false') {
+          lfiResults = await this.calculateLfiCharges(data, record, margin);
+        }
+
+
+        return {
+          ...record,
+          lfiResult: lfiResults,
+        };
+      }
+
+    });
+  }
   async calculateFee(data: any) {
 
     const calculatedData = data.map(async (record: { [x: string]: string; }) => {
@@ -143,7 +173,7 @@ export class UploadService {
       let applicableFee = 0;
       let numberOfPages = 0;
       let result: any[] = [];
-      let lfiResults: any[] = [];
+      // let lfiResults: any[] = [];
 
       if (record.group == "payment-bulk" && record['raw_api_log_data.is_large_corporate'] == 'TRUE') {
         calculatedFee = 250;
@@ -263,12 +293,19 @@ export class UploadService {
             } else {
               if (record.group == 'data') {
                 numberOfPages = Math.ceil(parseInt(record["raw_api_log_data.records"]) / 100);
-                const lfiData = await this.populateLfiData(data);
-                if (record["raw_api_log_data.is_attended"] == 'true') {
-                  lfiResults = await this.calculateLfiCharges(data, record,);
-                } else if (record["raw_api_log_data.is_attended"] == 'false') {
 
-                }
+                // Need to create new fundtion 
+                // const lfiData = await this.populateLfiData(data);
+
+                // let margin = record["raw_api_log_data.is_attended"] == 'true' ? 15 : record["raw_api_log_data.is_attended"] == 'false' ? 5 : 0;
+                // if (margin === 0) {
+                //   throw new Error("Margin cannot be 0. Invalid value for 'is_attended'.");
+                // }
+                // if (record["raw_api_log_data.is_attended"] == 'true') {
+                //   lfiResults = await this.calculateLfiCharges(data, record, margin);
+                // } else if (record["raw_api_log_data.is_attended"] == 'false') {
+                //   lfiResults = await this.calculateLfiCharges(data, record, margin);
+                // }
 
               } else {
                 calculatedFee = 0;
@@ -285,13 +322,13 @@ export class UploadService {
         applicableFee: applicableFee,
         result: result,
         numberOfPages: numberOfPages,
-        lfiResult: lfiResults
+        // lfiResult: lfiResults
       };
     });
 
     return calculatedData;
   }
-  async calculateLfiCharges(data: any, record: any) {
+  async calculateLfiCharges(data: any, record: any, margin: number) {
     const chargesData = {};
 
     data.forEach((transaction) => {
@@ -328,7 +365,7 @@ export class UploadService {
     const results = Object.values(chargesData).map((entry: { psuId: string; date: string; totalPages: number; transactions: any[] }) => {
       let chargeableTransactions = 0;
 
-      if (entry.totalPages > 15) {
+      if (entry.totalPages > margin) {
         chargeableTransactions = entry.transactions.length; // All transactions become chargeable
       }
 
