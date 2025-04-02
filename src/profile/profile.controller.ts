@@ -61,7 +61,7 @@ export class ProfileController {
     try {
       const logData = await this.profileService.getBillingDetails(id);
       return {
-        message: 'List of Bills',
+        message: 'Bill Details',
         result: logData,
         statusCode: HttpStatus.OK
       }
