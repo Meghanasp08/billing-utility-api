@@ -70,4 +70,20 @@ export class ProfileController {
     }
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('apihubfee/:id')
+  async getBillingHubDetails(@Param('id') id: string) {
+    try {
+      const logData = await this.profileService.getBillingHubDetails(id);
+      return {
+        message: 'Bill Details',
+        result: logData,
+        statusCode: HttpStatus.OK
+      }
+    } catch (error) {
+      throw error;
+    }
+  }
+
 }

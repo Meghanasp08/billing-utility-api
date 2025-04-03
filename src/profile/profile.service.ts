@@ -54,7 +54,8 @@ export class ProfileService {
               group: "$group",
               type: "$type"
             },
-            type_applicable_fee: { $sum: "$api_hub_fee" }
+            type_applicable_fee: { $sum: "$api_hub_fee" },
+            type_count: { $sum: 1 } // Count of documents contributing to type_applicable_fee
           }
         },
         {
@@ -64,10 +65,12 @@ export class ProfileService {
               group: "$_id.group"
             },
             group_applicable_fee: { $sum: "$type_applicable_fee" },
+            group_count: { $sum: "$type_count" }, // Count of all items under this group
             types: {
               $push: {
                 type: "$_id.type",
-                type_applicable_fee: "$type_applicable_fee"
+                type_applicable_fee: "$type_applicable_fee",
+                type_count: "$type_count"
               }
             }
           }
@@ -76,10 +79,12 @@ export class ProfileService {
           $group: {
             _id: "$_id.lfi_id",
             total_applicable_fee: { $sum: "$group_applicable_fee" },
+            total_count: { $sum: "$group_count" }, // Count of all items under this LFI
             groups: {
               $push: {
                 group: "$_id.group",
                 group_applicable_fee: "$group_applicable_fee",
+                group_count: "$group_count",
                 types: "$types"
               }
             }
@@ -90,10 +95,11 @@ export class ProfileService {
             _id: 0,
             lfi_id: "$_id",
             total_applicable_fee: 1,
+            total_count: 1,
             groups: 1
           }
         }
-      ]
+      ];
 
       const result = await this.logModel.aggregate(aggregateQuery).exec();
       return result;
@@ -102,5 +108,63 @@ export class ProfileService {
       throw new Error("Failed to fetch billing details");
     }
   }
+
+  async getBillingHubDetails(id: string) {
+    try {
+      const aggregateQuery = [
+        {
+          "$match": {
+            "raw_api_log_data.tpp_id": id // Filter by `tpp_id`
+          }
+        },
+        {
+          "$group": {
+            "_id": {
+              "category": {
+                "$cond": [
+                  { "$eq": ["$discounted", true] }, "COP / Balance Check (Discounted)",
+                  {
+                    "$cond": [
+                      { "$eq": ["$group", "insurance"] }, "insurance",
+                      {
+                        "$cond": [
+                          { "$eq": ["$group", "other"] }, "other",
+                          null
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            "totalCount": { "$sum": 1 },  // Count of records in each category
+            "totalFee": { "$sum": "$api_hub_fee" },  // Sum of `api_hub_fee` per category
+            "singleHubFee": { "$first": "$api_hub_fee" } // Example of a single fee
+          }
+        },
+        {
+          "$match": {
+            "_id.category": { "$ne": null } // Remove null categories
+          }
+        },
+        {
+          "$project": {
+            "_id": 0,
+            "category": "$_id.category",
+            "totalCount": 1,
+            "totalFee": 1,
+            "singleHubFee": 1
+          }
+        }
+      ];
+
+      const result = await this.logModel.aggregate(aggregateQuery).exec();
+      return result;
+    } catch (error) {
+      console.error("Error fetching billing details:", error);
+      throw new Error("Failed to fetch billing details");
+    }
+  }
+
 
 }

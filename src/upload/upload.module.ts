@@ -3,11 +3,12 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { MulterModule } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { Log, LogSchema } from './schemas/billing-log.schema';
+import { LfiData, LfiDataSchema } from './schemas/lfi-data.schema';
 import { UploadController } from './upload.controller';
 import { UploadService } from './upload.service';
 
 @Module({
-  imports: [MongooseModule.forFeature([{ name: Log.name, schema: LogSchema }]),
+  imports: [MongooseModule.forFeature([{ name: Log.name, schema: LogSchema }, { name: LfiData.name, schema: LfiDataSchema }]),
   MulterModule.register({
     storage: diskStorage({
       destination: './uploads',

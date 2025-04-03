@@ -170,6 +170,9 @@ export class Log {
   chargeable: boolean;
 
   @Prop()
+  discounted: boolean;
+
+  @Prop()
   group: string;
 
   @Prop()
@@ -183,6 +186,9 @@ export class Log {
 
   @Prop()
   applicableFee: number;
+
+  @Prop()
+  numberOfPages: number;
 
   @Prop({ type: [MerchantDailyData] })
   result: MerchantDailyData[];
