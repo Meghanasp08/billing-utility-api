@@ -1,4 +1,4 @@
-import { Controller, Get, HttpStatus, Param, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpStatus, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guard/jwt-auth-guard';
 import { ProfileService } from './profile.service';
@@ -26,9 +26,10 @@ export class ProfileController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Get('log')
-  async getLogData(@Req() req: any) {
+  async getLogData(@Req() req: any, @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string) {
     try {
-      const logData = await this.profileService.getLogData();
+      const logData = await this.profileService.getLogData(startDate, endDate);
       return {
         message: 'List of Logs',
         result: logData,
@@ -40,10 +41,12 @@ export class ProfileController {
   }
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @Get('billing')
-  async getBillingData(@Req() req: any) {
+  @Get('billing/lfi')
+  async getBillingLfiData(@Req() req: any, @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string) {
     try {
-      const logData = await this.profileService.getBillingData();
+      const group = 'lfi'
+      const logData = await this.profileService.getBillingData(group, startDate, endDate);
       return {
         message: 'List of Bills',
         result: logData,
@@ -56,10 +59,30 @@ export class ProfileController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @Get('billing/:id')
-  async getBillingDetails(@Param('id') id: string) {
+  @Get('billing/tpp')
+  async getBillingTppData(@Req() req: any, @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string) {
     try {
-      const logData = await this.profileService.getBillingDetails(id);
+      const group = 'tpp'
+      const logData = await this.profileService.getBillingData(group, startDate, endDate);
+      return {
+        message: 'List of Bills',
+        result: logData,
+        statusCode: HttpStatus.OK
+      }
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('billingdetail/lfi/:id')
+  async getBillingDetailsLfi(@Param('id') id: string, @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string) {
+    try {
+      const group: any = 'lfi'
+      const logData = await this.profileService.getBillingDetails(id, group, startDate, endDate);
       return {
         message: 'Bill Details',
         result: logData,
@@ -72,10 +95,47 @@ export class ProfileController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @Get('apihubfee/:id')
-  async getBillingHubDetails(@Param('id') id: string) {
+  @Get('billingdetail/tpp/:id')
+  async getBillingDetailsTpp(@Param('id') id: string, @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string) {
     try {
-      const logData = await this.profileService.getBillingHubDetails(id);
+      const group: any = 'tpp'
+
+      const logData = await this.profileService.getBillingDetails(id, group, startDate, endDate);
+      return {
+        message: 'Bill Details',
+        result: logData,
+        statusCode: HttpStatus.OK
+      }
+    } catch (error) {
+      throw error;
+    }
+  }
+
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('apihubfee/:id')
+  async getBillingHubDetails(@Param('id') id: string, @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string) {
+    try {
+      const logData = await this.profileService.getBillingHubDetails(id, startDate, endDate);
+      return {
+        message: 'Bill Details',
+        result: logData,
+        statusCode: HttpStatus.OK
+      }
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('lfidetails')
+  async getLfiDetails(@Req() req: any,) {
+    try {
+      const logData = await this.profileService.getLfiDetails();
       return {
         message: 'Bill Details',
         result: logData,

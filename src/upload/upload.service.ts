@@ -144,8 +144,8 @@ export class UploadService {
 
     const lfiDataToInsert = uniqueLfiIds.map(lfi_id => ({
       lfi_id,
-      mdp_retail_sme: parseFloat((Math.random() * (3 - 2) + 2).toFixed(2)), // Random between 2-3
-      mdp_corporate: parseFloat((Math.random() * (3 - 2) + 2).toFixed(2)),  // Random between 2-3
+      mdp_retail_sme: parseFloat((Math.random() * (3 - 2) + 2).toFixed(2)),
+      mdp_corporate: parseFloat((Math.random() * (3 - 2) + 2).toFixed(2)),
     }));
     // Insert into the MongoDB collection
     const insertedData = await this.lfiModel.insertMany(lfiDataToInsert);
