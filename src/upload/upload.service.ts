@@ -3,9 +3,12 @@ import { InjectModel } from '@nestjs/mongoose';
 import * as csv from 'csv-parser';
 import * as fs from 'fs';
 import { Model } from 'mongoose';
+import { AppConfig } from 'src/config/app.config';
 import { Log, LogDocument } from './schemas/billing-log.schema';
 import { ApiData, ApiDataDocument } from './schemas/endpoint.schema';
 import { LfiData, LfiDataDocument } from './schemas/lfi-data.schema';
+import { MerchantTransaction, MerchantTransactionDocument } from './schemas/merchant.limitapplied.schema';
+import { PageMultiplier, PageMultiplierDocument } from './schemas/pagemultiplier.schema';
 import { TppData, TppDataDocument } from './schemas/tpp-data.schema';
 @Injectable()
 export class UploadService {
@@ -14,24 +17,16 @@ export class UploadService {
     @InjectModel(LfiData.name) private lfiModel: Model<LfiDataDocument>,
     @InjectModel(TppData.name) private TppModel: Model<TppDataDocument>,
     @InjectModel(ApiData.name) private apiModel: Model<ApiDataDocument>,
+    @InjectModel(MerchantTransaction.name) private merchantLimitModel: Model<MerchantTransactionDocument>,
+    @InjectModel(PageMultiplier.name) private pageMultiplier: Model<PageMultiplierDocument>,
   ) { }
 
-  endpoints = [
-    "/open-finance/account-information/v1.1/account-access-consents:GET",
-    "/open-finance/payment/v1.1/payment-consents:GET",
-    "/open-finance/payment/v1.1/payments:GET",
-    "/open-finance/payment/v1.1/file-payments:GET",
-    "/open-finance/confirmation-of-payee/v1.1/discovery:POST",
-    "/open-finance/insurance/v1.1/insurance-consents:GET"
-  ];
+  private readonly endpoints = AppConfig.endpoints;
+  private readonly peer_to_peer_types = AppConfig.peerToPeerTypes;
+  private readonly payment_type_consents = AppConfig.paymentTypeConsents;
+  private readonly discount = AppConfig.discount;
+  private readonly aedConstant = AppConfig.aedConstant;
 
-  peer_to_peer_types = ["Collection", "LargeValueCollection", "PushP2P", "PullP2PPayment"]
-
-  payment_type_consents = ["single-immediate-payment", "multi-payment", "future-dated-payment"]
-
-  discount = 200;
-
-  aedConstant = 100;
   async mergeCsvFiles(file1Path: string, file2Path: string) {
     const file1Data: any[] = [];
     const file2Data: any[] = [];
@@ -41,12 +36,21 @@ export class UploadService {
         .pipe(csv())
         .on('data', (row) => {
           const normalizedRow: any = {};
+          let isEmptyRow = true;
+
           for (const key in row) {
             const normalizedKey = key.replace(/^\ufeff/, '').trim();
-            normalizedRow[normalizedKey] = row[key];
+            const value = row[key]?.trim();
+
+            normalizedRow[normalizedKey] = value;
+            if (value) isEmptyRow = false; // Mark row as non-empty if any field has a value
           }
-          normalizedRow['PaymentId'] = normalizedRow['PaymentId'] || normalizedRow['Payment Id'];
-          file1Data.push(normalizedRow);
+
+          // Only add non-empty rows
+          if (!isEmptyRow) {
+            normalizedRow['PaymentId'] = normalizedRow['PaymentId'] || normalizedRow['Payment Id'];
+            file1Data.push(normalizedRow);
+          }
         })
         .on('end', resolve)
         .on('error', reject);
@@ -57,65 +61,33 @@ export class UploadService {
         .pipe(csv())
         .on('data', (row) => {
           const normalizedRow: any = {};
+          let isEmptyRow = true;
+
           for (const key in row) {
             const normalizedKey = key.replace(/^\ufeff/, '').trim();
-            normalizedRow[normalizedKey] = row[key];
+            const value = row[key]?.trim();
+
+            normalizedRow[normalizedKey] = value;
+            if (value) isEmptyRow = false; // Mark row as non-empty if any field has a value
           }
-          normalizedRow['PaymentId'] = normalizedRow['PaymentId'] || normalizedRow['Payment Id'];
-          file2Data.push(normalizedRow);
+
+          // Only add non-empty rows
+          if (!isEmptyRow) {
+            normalizedRow['PaymentId'] = normalizedRow['PaymentId'] || normalizedRow['Payment Id'];
+            file2Data.push(normalizedRow);
+          }
         })
         .on('end', resolve)
         .on('error', reject);
     });
 
+    console.log(file1Data.length, 'raw api record')
+    console.log(file2Data.length, 'raw api record')
+
     const mergedData: any[] = [];
     for (let i = 0; i < file1Data.length; i++) {
       const rawApiRecord = file1Data[i];
       const paymentRecord = file2Data[i] || {};
-
-      // console.log('iam raw api record', rawApiRecord)
-      // console.log('iam payment record', paymentRecord)
-
-      // const mergedRecord = {
-      //   [`raw_api_log_data.timestamp`]: rawApiRecord.Timestamp || null,
-      //   [`raw_api_log_data.lfi_id`]: rawApiRecord['LFI Id'] || null,
-      //   [`raw_api_log_data.tpp_id`]: rawApiRecord['TPP Id'] || null,
-      //   [`raw_api_log_data.tpp_client_id`]: rawApiRecord['TPP Client Id'] || null,
-      //   [`raw_api_log_data.api_set_(sub)`]: rawApiRecord['API Set (sub)'] || null,
-      //   [`raw_api_log_data.http_method`]: rawApiRecord['HTTP Method'] || null,
-      //   [`raw_api_log_data.url`]: rawApiRecord.URL || null,
-      //   [`raw_api_log_data.tpp_response_code_group`]: rawApiRecord['TPP Response Code Group'] || null,
-      //   [`raw_api_log_data.execution_time`]: rawApiRecord['Execution Time'] || null,
-      //   [`raw_api_log_data.interaction_id`]: rawApiRecord['Interaction Id'] || null,
-      //   [`raw_api_log_data.resource_name`]: rawApiRecord['Resource Name'] || null,
-      //   [`raw_api_log_data.lfi_response_code_group`]: rawApiRecord['LFI Response Code Group'] || null,
-      //   [`raw_api_log_data.is_attended`]: rawApiRecord['Is Attended'] || null,
-      //   [`raw_api_log_data.records`]: rawApiRecord['Records Sent'] || null,
-      //   [`raw_api_log_data.payment_type`]: rawApiRecord['Payment Type'] || null,
-      //   [`raw_api_log_data.paymentid`]: rawApiRecord.PaymentId || null,
-      //   [`raw_api_log_data.merchant_id`]: rawApiRecord['Merchant Id'] || null,
-      //   [`raw_api_log_data.psu_id`]: rawApiRecord['PSU Id'] || null,
-      //   ["raw_api_log_data.is_large_corporate"]:
-      //     rawApiRecord['Is Large Corporate'] || null,
-      //   [`raw_api_log_data.user_type`]: rawApiRecord['User Type'] || null,
-      //   [`raw_api_log_data.purpose`]: rawApiRecord.Purpose || null,
-
-      //   [`payment_logs.timestamp`]: paymentRecord.Timestamp || null,
-      //   [`payment_logs.lfi_id`]: paymentRecord['LFI Id'] || null,
-      //   [`payment_logs.tpp_id`]: paymentRecord['TPP Id'] || '',
-      //   [`payment_logs.tpp_client_id`]: paymentRecord['TPP Client Id'] || null,
-      //   [`payment_logs.status`]: paymentRecord['Status'] || null,
-      //   [`payment_logs.currency`]: paymentRecord.Currency || null,
-      //   [`payment_logs.amount`]: paymentRecord.Amount || null,
-      //   [`payment_logs.payment_consent_type`]: paymentRecord['Payment Consent Type'] || null,
-      //   [`payment_logs.transaction_id`]: paymentRecord['Transaction Id'] || null,
-      //   [`payment_logs.payment_id`]: paymentRecord.PaymentId || null,
-      //   [`payment_logs.merchant_id`]: paymentRecord['Merchant Id'] || null,
-      //   [`payment_logs.psu_id`]: paymentRecord['PSU Id'] || null,
-      //   [`payment_logs.is_large_corporate`]: paymentRecord['Is Large Corporate'] || null,
-      //   [`payment_logs.number_of_successful_transactions`]: paymentRecord['Number of Successful Transactions'] || null,
-      //   [`payment_logs.international_payment`]: paymentRecord['International Payment'] || null,
-      // };
       const mergedRecord = {
         [`raw_api_log_data.timestamp`]: rawApiRecord.timestamp || null,
         [`raw_api_log_data.tpp_name`]: rawApiRecord.tppName || null,
@@ -164,22 +136,23 @@ export class UploadService {
       // console.log('iam count', i);
 
     }
+    // console.log('iam merged data', mergedData)
     const chargeFile = await this.chargableConvertion(mergedData);
-    // return chargeFile.length;
     console.log('stage 1 completed');
-
-    const groupFile = await this.setGroup(chargeFile);
-    console.log('stage 2 completed');
+    // return chargeFile
 
 
-    const feeApplied = await this.calculateFee(groupFile);
+
+
+    const feeApplied = await this.calculateFee(chargeFile);
     console.log('stage 3 completed');
+    // return feeApplied;
 
 
-    if (!feeApplied) {
-      throw new Error("Fee applied data is undefined.");
-    }
-    console.log('stage 4 completed');
+    // if (!feeApplied) {
+    //   throw new Error("Fee applied data is undefined.");
+    // }
+    // console.log('stage 4 completed');
 
     let response = await this.populateLfiData(feeApplied);
     console.log('stage 5 completed');
@@ -187,14 +160,70 @@ export class UploadService {
     let result = await this.populateTppData(feeApplied);
     console.log('stage 6 completed');
 
-    // // console.log('iam result', result)
-    // // console.log('iam result', response)
+    // // // console.log('iam result', result)
+    // // // console.log('iam result', response)
 
     const pagesFeeApplied = await this.feeCalculationForLfi(feeApplied);
     console.log('stage 7 completed');
+    // return pagesFeeApplied;
 
+    const pageDataCalculation = await this.attendedUpdateOnNumberOfPage(pagesFeeApplied);
+    // return pageDataCalculation;
     const billData = await this.logModel.insertMany(pagesFeeApplied);
     return billData.length;
+  }
+  async attendedUpdateOnNumberOfPage(data: any) {
+    let lfiPageDataArray: any[] = [];
+    const updatedData = data.map((record: any) => {
+      if (record.lfiResult && record.lfiResult.length > 0) {
+        const outerData = record.lfiResult.find(txn => txn.paymentId == record['payment_logs.payment_id']);
+        console.log('iam outer data', outerData)
+        record.calculatedFee = outerData.charge;
+        record.applicableFee = record.calculatedFee
+        lfiPageDataArray.push(record.lfiResult, record.summary)
+        delete record.lfiResult;
+        delete record.summary;
+        return {
+          ...record,
+          appliedLimit: outerData.appliedLimit,
+          chargeableAmount: outerData.chargeableAmount,
+          // charge: outerData.charge,
+          unit_price: outerData.mdp_rate,
+        };
+      }
+
+      return record;
+    });
+
+    const uniqueLfiPageData = await this.processData(lfiPageDataArray);
+    const existingMulti = await this.pageMultiplier.findOne({
+      "summary.psuId": uniqueLfiPageData.summary.psuId,
+      'summary.date': uniqueLfiPageData.summary.date
+    });
+    if (!existingMulti) {
+      const lfiPageData = await this.pageMultiplier.insertMany(uniqueLfiPageData);
+    }
+
+    return updatedData;
+  }
+
+  async processData(input) {
+    const uniqueTransactions = new Map();
+
+    input.forEach((item) => {
+      if (Array.isArray(item)) {
+        item.forEach((transaction) => {
+          uniqueTransactions.set(transaction.paymentId, transaction);
+        });
+      }
+    });
+
+    const summary = input.find((item) => item.psuId) || {};
+
+    return {
+      transactions: Array.from(uniqueTransactions.values()),
+      summary,
+    };
   }
 
   async pageCalculation(records: any) {
@@ -212,11 +241,9 @@ export class UploadService {
       free_limit_attended: 15,
       free_limit_unattended: 5,
     }));
-    console.log('lfi data insert')
     const results = [];
     for (const lfiData of lfiDataToInsert) {
       const existing = await this.lfiModel.findOne({ lfi_id: lfiData.lfi_id });
-      console.log("iam hereee", lfiData)
       if (!existing) {
         // If the LFI ID does not exist, insert the data
         const inserted = await this.lfiModel.create(lfiData);
@@ -238,150 +265,65 @@ export class UploadService {
       tpp_client_id: `TPP Client ID ${tpp_id}`,
     }));
 
-    const results = [];
     for (const tppData of tppDataToInsert) {
-      const existing = await this.TppModel.findOne({ lfi_id: tppData.tpp_id });
-
-      if (!existing) {
-        // If the LFI ID does not exist, insert the data
-        const inserted = await this.TppModel.create(tppData);
-        inserted
-      } else {
-        console.log(`Duplicate LFI ID skipped: ${tppData.tpp_id}`);
+      try {
+        // Atomic check-and-insert operation
+        await this.TppModel.updateOne(
+          { tpp_id: tppData.tpp_id }, // Filter for existing record
+          { $setOnInsert: tppData }, // Insert only if not found
+          { upsert: true }           // Create new document if no match is found
+        );
+      } catch (error) {
+        console.error(`Error processing TPP ID ${tppData.tpp_id}:`, error.message);
       }
     }
 
-    return results;
+    return `Processed ${tppDataToInsert.length} TPP records.`;
   }
-
-  // async feeCalculationForLfi(data: any) {
-  //   try {
-  //     const lfiCalculated = await Promise.all(
-  //       data.map(async (record: { [x: string]: any }) => {
-  //         if (record.group === "data" && record.type === "other") {
-  //           const lfiData = await this.lfiModel.findOne({
-  //             lfi_id: record["raw_api_log_data.lfi_id"],
-  //           });
-
-  //           if (!lfiData) return null; // Return null instead of pushing (filtered later)
-
-  //           const isLargeCorporate =
-  //             record["raw_api_log_data.is_large_corporate"] === "TRUE";
-  //           // const lfiMdpMultiplier = isLargeCorporate
-  //           //   ? lfiData.mdp_corporate
-  //           //   : lfiData.mdp_retail_sme;
-  //           const lfiMdpMultiplier = lfiData.mdp_rate;
-
-  //           const margin =
-  //             record["raw_api_log_data.is_attended"] == "1"
-  //               ? lfiData.free_limit_attended
-  //               : record["raw_api_log_data.is_attended"] == "0"
-  //                 ? lfiData.free_limit_unattended
-  //                 : 0;
-
-  //           // if (margin === 0) {
-  //           //   throw new Error(
-  //           //     "Margin cannot be 0. Invalid value for 'is_attended'."
-  //           //   );
-  //           // }
-  //           console.log('margin completed')
-  //           const chargesData: Record<string, any> = {};
-
-  //           // Iterate over data again to process transactions
-  //           data.forEach((transaction) => {
-  //             const {
-  //               "raw_api_log_data.psu_id": psuId,
-  //               "raw_api_log_data.timestamp": timestamp,
-  //               numberOfPages,
-  //             } = transaction;
-
-  //             if (!psuId || !timestamp || !numberOfPages) return;
-  //             if (psuId !== record["raw_api_log_data.psu_id"]) return;
-
-  //             const date = new Date(timestamp).toISOString().split("T")[0];
-  //             const key = `${psuId}_${date}`;
-
-  //             if (!chargesData[key]) {
-  //               chargesData[key] = {
-  //                 psuId,
-  //                 date,
-  //                 totalPages: 0,
-  //                 transactions: [],
-  //               };
-  //             }
-
-  //             chargesData[key].transactions.push(transaction);
-  //             chargesData[key].totalPages += numberOfPages;
-  //           });
-  //           console.log('charges data completed')
-  //           // Generate charges per customer
-  //           const customerCharges = Object.values(chargesData).map(
-  //             (entry: {
-  //               psuId: string;
-  //               date: string;
-  //               totalPages: number;
-  //               transactions: any[];
-  //             }) => {
-  //               let chargeableTransactions =
-  //                 entry.totalPages > margin ? entry.transactions.length : 0;
-  //               return {
-  //                 psuId: entry.psuId,
-  //                 date: entry.date,
-  //                 totalPages: entry.totalPages,
-  //                 chargeableTransactions,
-  //                 charge: chargeableTransactions * lfiMdpMultiplier,
-  //               };
-  //             }
-  //           );
-  //           console.log('customer charges completed')
-  //           return {
-  //             ...record,
-  //             lfiResult: customerCharges.length > 0 ? customerCharges : [],
-  //           };
-  //         }
-  //         return record; // Return unchanged if conditions are not met
-  //       })
-  //     );
-  //     console.log(lfiCalculated, 'lfi calculated completed')
-  //     return lfiCalculated // Remove null entries
-  //   } catch (error) {
-  //     console.error("Error calculating LFI fee:", error);
-  //     throw new Error("Fee calculation failed");
-  //   }
-  // }
 
   async feeCalculationForLfi(data: any) {
     try {
-      //  Step 1: Preprocess - group by psuId + date
-      const psuGroupedMap: Record<string, { psuId: string; date: string; totalPages: number; transactions: any[] }> = {};
+      // Step 1: Preprocess - group by psuId + date + is_attended
+      const psuGroupedMap: Record<
+        string,
+        { psuId: string; date: string; isAttended: string; totalPages: number; transactions: any[] }
+      > = {};
 
       data.forEach((transaction) => {
-        const psuId = transaction["raw_api_log_data.psu_id"];
-        const timestamp = transaction["raw_api_log_data.timestamp"];
-        const numberOfPages = transaction.numberOfPages;
+        if (transaction.lfiChargable && transaction.success && transaction.group === "data" && transaction.type === "NA") {
+          const psuId = transaction["raw_api_log_data.psu_id"];
+          const timestamp = transaction["raw_api_log_data.timestamp"];
+          const numberOfPages = transaction.numberOfPages;
+          const isAttended = transaction["raw_api_log_data.is_attended"];
 
-        if (!psuId || !timestamp || !numberOfPages) return;
+          if (!psuId || !timestamp || !numberOfPages || isAttended === undefined) return;
 
-        const date = new Date(timestamp).toISOString().split("T")[0];
-        const key = `${psuId}_${date}`;
+          const date = new Date(timestamp).toISOString().split("T")[0];
+          const key = `${psuId}_${date}_${isAttended}`;
 
-        if (!psuGroupedMap[key]) {
-          psuGroupedMap[key] = {
-            psuId,
-            date,
-            totalPages: 0,
-            transactions: [],
-          };
+          if (!psuGroupedMap[key]) {
+            psuGroupedMap[key] = {
+              psuId,
+              date,
+              isAttended,
+              totalPages: 0,
+              transactions: [],
+            };
+          }
+
+          psuGroupedMap[key].transactions.push(transaction);
+          psuGroupedMap[key].totalPages += numberOfPages;
         }
-
-        psuGroupedMap[key].transactions.push(transaction);
-        psuGroupedMap[key].totalPages += numberOfPages;
       });
 
-      //  Step 2: Process each record
+      // Step 2: Process each record
       const lfiCalculated = await Promise.all(
         data.map(async (record: { [x: string]: any }) => {
-          if (record.group === "data" && record.type === "other") {
+          if (record.group === "data" && record.type === "NA" && record.lfiChargable && record.success) {
+            if (Boolean(record["raw_api_log_data.is_large_corporate"])) {
+              record.type = "corporate";
+            }
+
             const lfiData = await this.lfiModel.findOne({
               lfi_id: record["raw_api_log_data.lfi_id"],
             });
@@ -390,13 +332,15 @@ export class UploadService {
 
             const psuId = record["raw_api_log_data.psu_id"];
             const date = new Date(record["raw_api_log_data.timestamp"]).toISOString().split("T")[0];
-            const key = `${psuId}_${date}`;
+            const isAttended = record["raw_api_log_data.is_attended"];
+            const key = `${psuId}_${date}_${isAttended}`;
 
-            const margin = record["raw_api_log_data.is_attended"] == "1"
-              ? lfiData.free_limit_attended
-              : record["raw_api_log_data.is_attended"] == "0"
-                ? lfiData.free_limit_unattended
-                : 0;
+            const margin =
+              Boolean(isAttended) === true
+                ? lfiData.free_limit_attended
+                : Boolean(isAttended) === false
+                  ? lfiData.free_limit_unattended
+                  : 0;
 
             const lfiMdpMultiplier = lfiData.mdp_rate;
 
@@ -406,209 +350,75 @@ export class UploadService {
               return { ...record, lfiResult: [] };
             }
 
-            const chargeableTransactions =
-              chargesData.totalPages > margin ? chargesData.transactions.length : 0;
+            // Apply discount logic
+            let remainingMargin = margin;
+            const processedTransactions = chargesData.transactions.map((txn) => {
+              const appliedLimit = Math.min(remainingMargin, txn.numberOfPages);
+              remainingMargin -= appliedLimit;
+
+              const chargeableAmount = txn.numberOfPages - appliedLimit;
+              const charge = chargeableAmount * lfiMdpMultiplier;
+
+              return {
+                ...txn,
+                paymentId: txn["payment_logs.payment_id"],
+                mdp_rate: lfiMdpMultiplier,
+                appliedLimit,
+                chargeableAmount,
+                charge,
+              };
+            });
+
+
+            const totalCharge = processedTransactions.reduce((acc, txn) => acc + txn.charge, 0);
 
             const customerCharge = {
               psuId,
               date,
               totalPages: chargesData.totalPages,
-              chargeableTransactions,
-              charge: chargeableTransactions * lfiMdpMultiplier,
+              chargeableTransactions: processedTransactions.length,
+              charge: totalCharge,
             };
 
             return {
               ...record,
-              lfiResult: [customerCharge],
+              lfiResult: processedTransactions,
+              summary: customerCharge,
             };
           }
+
 
           return record; // Unchanged
         })
       );
 
-      return lfiCalculated;
+      return lfiCalculated.map((record) => {
+        // Return a simplified structure
+        if (record.lfiResult && record.lfiResult.length > 0) {
+          return {
+            ...record,
+            lfiResult: record.lfiResult.map((txn: any) => ({
+              // raw_api_log_data: txn["raw_api_log_data"],
+              // payment_logs: txn["payment_logs"],
+              appliedLimit: txn.appliedLimit,
+              chargeableAmount: txn.chargeableAmount,
+              charge: txn.charge,
+              paymentId: txn.paymentId,
+              tpp_id: txn["raw_api_log_data.tpp_id"],
+              lfi_id: txn["raw_api_log_data.lfi_id"],
+              isAttended: Boolean(txn["raw_api_log_data.is_attended"]),
+              mdp_rate: txn.mdp_rate,
+            })),
+            summary: record.summary,
+          };
+        }
+        return record;
+      });
     } catch (error) {
       console.error("Error calculating LFI fee:", error);
       throw new Error("Fee calculation failed");
     }
   }
-
-
-
-  // async calculateFee(data: any) {
-
-  //   try {
-  //     const calculatedData = await Promise.all(data.map(async (record: { [x: string]: string; }) => {
-  //       let calculatedFee = 0;
-  //       let applicableFee = 0;
-  //       let numberOfPages = 0;
-  //       let result: any[] = [];
-  //       // let lfiResults: any[] = [];
-
-  //       if (record.group == "payment-bulk") {
-  //         if (record['raw_api_log_data.is_large_corporate'] == 'TRUE') {
-
-  //           calculatedFee = 250 / this.aedConstant;
-  //           applicableFee = calculatedFee;
-  //           record.type = "corporate";
-  //         }
-  //         // else if (record['raw_api_log_data.is_large_corporate'] == 'FALSE'){
-
-  //         // }
-
-  //       }
-  //       // else {
-
-  //       //MERCHANT CALCULATION
-
-  //       if (record.type == "merchant") {
-
-  //         // For Large Corporate merchants
-  //         if (record["raw_api_log_data.payment_type"] == 'LargeValueCollection') {
-  //           calculatedFee = parseInt(record["payment_logs.amount"]) * 0.0038;
-  //           applicableFee = calculatedFee > 4 ? 4 : calculatedFee;
-  //         }
-  //         // For Non-Large Corporate merchants, apply the 200 AED deduction per day and merchant
-  //         else {
-  //           const merchantDailyData: Record<string, any> = {};
-
-  //           // Group data by merchantId and date
-  //           data.forEach((transaction) => {
-  //             const {
-  //               "payment_logs.amount": rawAmount,
-  //               "payment_logs.merchant_id": merchantId,
-  //               "raw_api_log_data.timestamp": timestamp,
-  //               "payment_logs.payment_id": paymentId,
-  //             } = transaction;
-
-  //             if (merchantId != record["payment_logs.merchant_id"]) {
-  //               return; // Skip transactions that don't belong to this merchant
-  //             }
-
-  //             if (!merchantId) return;  // Skip transactions without a merchantId
-
-  //             const amount = parseInt(rawAmount, 10);
-  //             const date = new Date(timestamp).toISOString().split("T")[0];
-  //             const key = `${merchantId}_${date}`;
-
-  //             // Initialize the merchant's daily data if not already present
-  //             if (!merchantDailyData[key]) {
-  //               merchantDailyData[key] = {
-  //                 merchantId,
-  //                 date,
-  //                 transactions: [],
-  //                 totalAmount: 0,
-  //                 limitApplied: false,
-  //                 remainingBalance: this.discount,
-  //               };
-  //             }
-
-  //             const merchantData = merchantDailyData[key];
-
-
-  //             let appliedLimit = 0;
-
-  //             // Apply the 200 AED limit per day
-  //             if (merchantData.remainingBalance > 0) {
-  //               appliedLimit = Math.min(merchantData.remainingBalance, amount);
-  //               merchantData.remainingBalance -= appliedLimit; // Reduce the remaining balance
-  //               merchantData.limitApplied = true; // Mark that the limit has been applied
-  //             }
-
-  //             // Add the transaction details (amount after limit applied)
-  //             if (paymentId == record["raw_api_log_data.paymentid"]) {
-  //               merchantData.transactions.push({
-  //                 timestamp,
-  //                 paymentId,
-  //                 amount,
-  //                 appliedLimit,
-  //                 chargeableAmount: amount - appliedLimit, // Remaining chargeable amount after limit
-  //               });
-
-  //             }
-
-  //             merchantData.totalAmount += amount; // Add the total amount of the day for the merchant
-  //           });
-
-  //           // Convert the merchant daily data to an array of results
-  //           result = Object.values(merchantDailyData);
-  //           const filteredData = result.length > 0 ? result[0].transactions.filter((filterData: { [x: string]: string; }) => {
-  //             return filterData.paymentId == record["payment_logs.payment_id"]
-  //           }) : [];
-  //           calculatedFee = filteredData[0].chargeableAmount * 0.0038;
-  //           applicableFee = parseInt(record["payment_logs.amount"]) > 20000 ? 50 : calculatedFee;
-  //         }
-  //       }
-
-  //       //PEER-2-PEER CALCULATION
-
-  //       else if (record.type == 'peer-2-peer') {
-  //         if (record["raw_api_log_data.payment_type"] == 'LargeValueCollection') {
-  //           calculatedFee = parseInt(record["payment_logs.amount"]) * 0.0038;
-  //           applicableFee = calculatedFee > 4 ? 4 : calculatedFee;
-  //         }
-  //         else {
-  //           calculatedFee = 25 / this.aedConstant;
-  //           applicableFee = record.group == "payment-bulk" ? calculatedFee > 250 ? 250 : calculatedFee : calculatedFee;
-  //         }
-  //       }
-
-  //       //ME-2-ME CALCULATION
-
-  //       else if (record.type == 'me-2-me') {
-  //         calculatedFee = 20 / this.aedConstant;
-  //         applicableFee = record.group == "payment-bulk" ? calculatedFee > 250 ? 250 : calculatedFee : calculatedFee;
-  //       }
-
-  //       //OTHER CALCULATION
-
-  //       else {
-  //         if (record.type == 'other') {
-  //           if (record.group == 'insurance') {
-  //             calculatedFee = 0;
-  //             applicableFee = calculatedFee;
-  //           } else {
-  //             if (record.group == 'data') {
-  //               numberOfPages = Math.ceil(parseInt(record["raw_api_log_data.records"] ?? 0) / 100);
-
-  //               // Need to create new fundtion 
-  //               // const lfiData = await this.populateLfiData(data);
-
-  //               // let margin = record["raw_api_log_data.is_attended"] == 'true' ? 15 : record["raw_api_log_data.is_attended"] == 'false' ? 5 : 0;
-  //               // if (margin === 0) {
-  //               //   throw new Error("Margin cannot be 0. Invalid value for 'is_attended'.");
-  //               // }
-  //               // if (record["raw_api_log_data.is_attended"] == 'true') {
-  //               //   lfiResults = await this.calculateLfiCharges(data, record, margin);
-  //               // } else if (record["raw_api_log_data.is_attended"] == 'false') {
-  //               //   lfiResults = await this.calculateLfiCharges(data, record, margin);
-  //               // }
-
-  //             } else {
-  //               calculatedFee = 0;
-  //               applicableFee = calculatedFee;
-  //             }
-  //           }
-  //         }
-  //       }
-  //       // }
-
-  //       return {
-  //         ...record,
-  //         calculatedFee: calculatedFee,
-  //         applicableFee: applicableFee,
-  //         result: result,
-  //         numberOfPages: numberOfPages,
-  //         // lfiResult: lfiResults
-  //       };
-  //     })
-  //     );
-  //     return calculatedData;
-  //   } catch (error) {
-  //     console.log(error)
-  //   }
-  // }
 
 
   async calculateFee(data: any) {
@@ -624,116 +434,152 @@ export class UploadService {
       }> = {};
 
       for (const transaction of data) {
-        const merchantId = transaction["payment_logs.merchant_id"];
-        const timestamp = transaction["raw_api_log_data.timestamp"];
-        const paymentId = transaction["payment_logs.payment_id"];
-        const amount = parseInt(transaction["payment_logs.amount"] || "0", 10);
+        // if (!transaction.lfiChargable && !transaction.success) continue; // Skip if not chargeable
+        if (transaction.lfiChargable && transaction.success) {
 
-        if (!merchantId || !timestamp) continue;
+          const merchantId = transaction["payment_logs.merchant_id"];
+          const timestamp = transaction["raw_api_log_data.timestamp"];
+          const paymentId = transaction["payment_logs.payment_id"];
+          const amount = parseInt(transaction["payment_logs.amount"] || "0", 10);
 
-        const date = new Date(timestamp).toISOString().split("T")[0];
-        const key = `${merchantId}_${date}`;
+          if (!merchantId || !timestamp) continue;
 
-        if (!merchantGroupedMap[key]) {
-          merchantGroupedMap[key] = {
-            merchantId,
-            date,
-            transactions: [],
-            totalAmount: 0,
-            limitApplied: false,
-            remainingBalance: this.discount,
-          };
+          const date = new Date(timestamp).toISOString().split("T")[0];
+          const key = `${merchantId}_${date}`;
+
+          if (!merchantGroupedMap[key]) {
+            merchantGroupedMap[key] = {
+              merchantId,
+              date,
+              transactions: [],
+              totalAmount: 0,
+              limitApplied: false,
+              remainingBalance: this.discount,
+            };
+          }
+
+          const group = merchantGroupedMap[key];
+
+          let appliedLimit = 0;
+          if (group.remainingBalance > 0) {
+            appliedLimit = Math.min(group.remainingBalance, amount);
+            group.remainingBalance -= appliedLimit;
+            group.limitApplied = true;
+          }
+
+          group.transactions.push({
+            timestamp,
+            paymentId,
+            amount,
+            appliedLimit,
+            chargeableAmount: amount - appliedLimit,
+          });
+
+          group.totalAmount += amount;
         }
-
-        const group = merchantGroupedMap[key];
-
-        let appliedLimit = 0;
-        if (group.remainingBalance > 0) {
-          appliedLimit = Math.min(group.remainingBalance, amount);
-          group.remainingBalance -= appliedLimit;
-          group.limitApplied = true;
-        }
-
-        group.transactions.push({
-          timestamp,
-          paymentId,
-          amount,
-          appliedLimit,
-          chargeableAmount: amount - appliedLimit,
-        });
-
-        group.totalAmount += amount;
       }
+      let merchantArray: any[] = [];
 
       // STEP 2: Now map and use fast lookup
       const calculatedData = await Promise.all(data.map(async (record: { [x: string]: string; }) => {
+
         let calculatedFee = 0;
         let applicableFee = 0;
         let numberOfPages = 0;
         let result: any[] = [];
+        let unit_price = 0;
+        let chargeableAmount = 0;
+        let appliedLimit = 0;
+        let limitApplied = false;
+        if (record.lfiChargable && record.success) {
 
-        if (record.group === "payment-bulk" && record['raw_api_log_data.is_large_corporate'] === 'TRUE') {
-          calculatedFee = 250 / this.aedConstant;
-          applicableFee = calculatedFee;
-          record.type = "corporate";
-        }
+          if (record.group === "payment-bulk" && Boolean(record['raw_api_log_data.is_large_corporate'])) {
+            calculatedFee = 250 / this.aedConstant;
+            applicableFee = calculatedFee;
+            record.type = "corporate";
+          }
 
-        // MERCHANT CALCULATION
-        if (record.type === "merchant") {
-          if (record["raw_api_log_data.payment_type"] === 'LargeValueCollection') {
-            calculatedFee = parseInt(record["payment_logs.amount"]) * 0.0038;
-            applicableFee = calculatedFee > 4 ? 4 : calculatedFee;
-          } else {
-            const date = new Date(record["raw_api_log_data.timestamp"]).toISOString().split("T")[0];
-            const key = `${record["payment_logs.merchant_id"]}_${date}`;
-            const merchantGroup = merchantGroupedMap[key];
+          // MERCHANT CALCULATION
+          if (record.type === "merchant") {
 
-            if (merchantGroup) {
-              result = [merchantGroup]; // For consistency if needed in frontend
-              const filteredTransaction = merchantGroup.transactions.find((t) =>
-                t.paymentId === record["payment_logs.payment_id"]
-              );
+            if (record["raw_api_log_data.payment_type"] === 'LargeValueCollection') {
+              // calculatedFee = parseInt(record["payment_logs.amount"]) * 0.0038;
+              // applicableFee = calculatedFee > 4 ? 4 : calculatedFee;
+              calculatedFee = parseFloat((parseInt(record["payment_logs.amount"]) * 0.0038).toFixed(3));
+              applicableFee = parseFloat((calculatedFee > 4 ? 4 : calculatedFee).toFixed(3));
+              unit_price = 0.0038;
+              chargeableAmount = parseInt(record["payment_logs.amount"]);
+            } else {
+              const date = new Date(record["raw_api_log_data.timestamp"]).toISOString().split("T")[0];
+              const key = `${record["payment_logs.merchant_id"]}_${date}`;
+              const merchantGroup = merchantGroupedMap[key];
 
-              if (filteredTransaction) {
-                calculatedFee = filteredTransaction.chargeableAmount * 0.0038;
-                applicableFee = parseInt(record["payment_logs.amount"]) > 20000 ? 50 : calculatedFee;
+              if (merchantGroup) {
+                result = [merchantGroup]; // For consistency if needed in frontend
+                if (result.length > 0) {
+                  merchantArray.push(merchantGroup);
+
+                }
+                const filteredTransaction = merchantGroup.transactions.find((t) =>
+                  t.paymentId === record["payment_logs.payment_id"]
+                );
+
+                if (filteredTransaction) {
+                  console.log('iam filtered transaction', filteredTransaction);
+                  // calculatedFee = filteredTransaction.chargeableAmount * 0.0038;
+                  // applicableFee = parseInt(record["payment_logs.amount"]) > 20000 ? 50 : calculatedFee;
+                  calculatedFee = parseFloat((filteredTransaction.chargeableAmount * 0.0038).toFixed(3));
+                  applicableFee = parseFloat((parseInt(record["payment_logs.amount"]) > 20000 ? 50 : calculatedFee).toFixed(3));
+                  unit_price = 0.0038;
+                  chargeableAmount = filteredTransaction.chargeableAmount;
+                  appliedLimit = filteredTransaction.appliedLimit;
+                  limitApplied = merchantGroup.limitApplied;
+
+                }
               }
             }
+
           }
-        }
 
-        // PEER-2-PEER
-        else if (record.type === 'peer-2-peer') {
-          if (record["raw_api_log_data.payment_type"] === 'LargeValueCollection') {
-            calculatedFee = parseInt(record["payment_logs.amount"]) * 0.0038;
-            applicableFee = calculatedFee > 4 ? 4 : calculatedFee;
-          } else {
-            calculatedFee = 25 / this.aedConstant;
-            applicableFee = record.group === "payment-bulk"
-              ? calculatedFee > 250 ? 250 : calculatedFee
-              : calculatedFee;
+          // PEER-2-PEER
+          else if (record.type === 'peer-2-peer') {
+            if (record["raw_api_log_data.payment_type"] === 'LargeValueCollection') {
+              calculatedFee = parseFloat((parseInt(record["payment_logs.amount"]) * 0.0038).toFixed(3));
+              applicableFee = parseFloat((calculatedFee > 4 ? 4 : calculatedFee).toFixed(3));
+              unit_price = 0.0038;
+              chargeableAmount = parseInt(record["payment_logs.amount"]);
+            } else {
+              calculatedFee = parseFloat((25 / this.aedConstant).toFixed(3));
+              applicableFee = parseFloat((record.group === "payment-bulk"
+                ? (calculatedFee > 2.50 ? 2.50 : calculatedFee)
+                : calculatedFee).toFixed(3));
+            }
           }
-        }
 
-        // ME-2-ME
-        else if (record.type === 'me-2-me') {
-          calculatedFee = 20 / this.aedConstant;
-          applicableFee = record.group === "payment-bulk"
-            ? calculatedFee > 250 ? 250 : calculatedFee
-            : calculatedFee;
-        }
+          // ME-2-ME
+          else if (record.type === 'me-2-me') {
+            // calculatedFee = 20 / this.aedConstant;
+            // applicableFee = record.group === "payment-bulk"
+            //   ? calculatedFee > 250 ? 250 : calculatedFee
+            //   : calculatedFee;
+            calculatedFee = parseFloat((25 / this.aedConstant).toFixed(3));
+            applicableFee = parseFloat((record.group === "payment-bulk"
+              ? (calculatedFee > 2.50 ? 2.50 : calculatedFee)
+              : calculatedFee).toFixed(3));
+          }
 
-        // OTHER
-        else if (record.type === 'other') {
-          if (record.group === 'insurance') {
-            calculatedFee = 0;
-            applicableFee = calculatedFee;
-          } else if (record.group === 'data') {
-            numberOfPages = Math.ceil(parseInt(record["raw_api_log_data.records"] ?? "0") / 100);
-            // Future LFI logic would be called here
-          } else {
-            calculatedFee = 0;
-            applicableFee = calculatedFee;
+          // OTHER
+          else if (record.type === 'NA') {
+            if (record.group === 'insurance') {
+              calculatedFee = 0;
+              applicableFee = calculatedFee;
+            } else if (record.group === 'data') {
+              numberOfPages = Math.ceil(parseInt(record["raw_api_log_data.records"] ?? "0") / 100);
+              // Future LFI logic would be called here
+            } else {
+              calculatedFee = 0;
+              applicableFee = calculatedFee;
+            }
           }
         }
 
@@ -741,10 +587,42 @@ export class UploadService {
           ...record,
           calculatedFee,
           applicableFee,
-          result,
+          unit_price,
+          chargeableAmount,
+          appliedLimit,
+          limitApplied,
+          // result,
           numberOfPages,
         };
       }));
+
+      const uniqueMerchantsMap = new Map();
+
+      merchantArray.forEach((merchant) => {
+        if (!uniqueMerchantsMap.has(merchant.merchantId)) {
+          uniqueMerchantsMap.set(merchant.merchantId, merchant);
+        }
+      });
+
+      // Convert the unique map values back to an array
+      const uniqueMerchants = Array.from(uniqueMerchantsMap.values());
+
+      // Process each unique merchant
+      if (uniqueMerchants.length > 0) {
+        console.log('Unique merchants:', uniqueMerchants);
+
+        for (const merchant of uniqueMerchants) {
+          const existingMerchant = await this.merchantLimitModel.findOne({ merchantId: merchant.merchantId });
+
+          if (!existingMerchant) {
+            await this.merchantLimitModel.insertMany(merchant);
+            console.log(`Inserted merchant with ID ${merchant.merchantId}`);
+          } else {
+            console.log(`Merchant with ID ${merchant.merchantId} already exists. Skipping insertion.`);
+          }
+        }
+      }
+
 
       return calculatedData;
     } catch (error) {
@@ -754,82 +632,182 @@ export class UploadService {
   }
 
 
-  async chargableConvertion(data: any) {
-    const updatedData = data.map(async (record: { [x: string]: string; }) => {
-      let discounted = false;
-      let api_hub_fee = 2.5 / this.aedConstant;
-      // let isChargeable = !this.endpoints.includes(`${record["raw_api_log_data.url"]}:${record["raw_api_log_data.http_method"]}`);
-      let apiData = await this.apiModel.find({ chargeable_api_hub_fee: true, chargeable_LFI_TPP_fee: true });
-      let chargableUrls = apiData
-        .filter(api => api.chargeable_api_hub_fee === true)
-        .map(api => `${api.api_spec}${api.api_endpoint}:${record["raw_api_log_data.http_method"]}`);
+  // async chargableConvertion(data: any) {
+  //   let group = "Other";
+  //   let apiData = await this.apiModel.find({
+  //     $or: [
+  //       { chargeable_api_hub_fee: true },
+  //       { chargeable_LFI_TPP_fee: true }
+  //     ]
+  //   });
 
-      let lfiChargableUrls = apiData
-        .filter(api => api.chargeable_LFI_TPP_fee === true)
-        .map(api => `${api.api_spec}${api.api_endpoint}:${record["raw_api_log_data.http_method"]}`);
-      let isChargeable = chargableUrls.includes(`${record["raw_api_log_data.url"]}:${record["raw_api_log_data.http_method"]}`);
-      let islfiChargable = chargableUrls.includes(`${record["raw_api_log_data.url"]}:${record["raw_api_log_data.http_method"]}`);
-      let success = record["raw_api_log_data.tpp_response_code_group"] == "2xx" && record["raw_api_log_data.lfi_response_code_group"] == "2xx";
-      if (record["raw_api_log_data.psu_id"] != null && isChargeable && (record["raw_api_log_data.url"].includes('confirmation-of-payee') || record["raw_api_log_data.url"].includes('balances'))) {
-        const filterData = data.filter((logData: { [x: string]: string; }) => {
-          return logData["raw_api_log_data.psu_id"] === record["raw_api_log_data.psu_id"] && !logData["raw_api_log_data.url"].includes('confirmation-of-payee') && !logData["raw_api_log_data.url"].includes('balances')
-        })
+  //   // Generate chargeable URLs outside the map loop
+  //   let chargableUrls = apiData
+  //     .filter(api => api.chargeable_api_hub_fee === true)
+  //     .map(api => `${api.api_spec}${api.api_endpoint}:${api.api_operation.toUpperCase()}`);
+
+  //   let lfiChargableUrls = apiData
+  //     .filter(api => api.chargeable_LFI_TPP_fee === true)
+  //     .map(api => `${api.api_spec}${api.api_endpoint}:${api.api_operation.toUpperCase()}`);
+
+  //   const updatedData = await Promise.all(data.map(async (record: { [x: string]: string; }) => {
+  //     let discounted = false;
+  //     let api_hub_fee = 2.5 / this.aedConstant;
+
+
+  //     let groupData = apiData.find(api =>
+  //       `${api.api_spec}${api.api_endpoint}:${api.api_operation.toUpperCase()}`
+  //         .replace(/\s+/g, '') == // Remove all whitespace
+  //       `${record["raw_api_log_data.url"]}:${record["raw_api_log_data.http_method"].toUpperCase()}`
+  //         .replace(/\s+/g, '') // Remove all whitespace
+  //     );
+
+
+  //     let isChargeable = chargableUrls.includes(`${record["raw_api_log_data.url"]}:${record["raw_api_log_data.http_method"]}`);
+  //     let islfiChargable = lfiChargableUrls.includes(`${record["raw_api_log_data.url"]}:${record["raw_api_log_data.http_method"]}`);
+  //     let success = record["raw_api_log_data.tpp_response_code_group"] == "2xx" && record["raw_api_log_data.lfi_response_code_group"] == "2xx";
+  //     if (record["raw_api_log_data.psu_id"] != null && isChargeable && success && (record["raw_api_log_data.url"].includes('confirmation-of-payee') || record["raw_api_log_data.url"].includes('balances'))) {
+  //       const filterData = data.filter((logData: { [x: string]: string; }) => {
+  //         return logData["raw_api_log_data.psu_id"] === record["raw_api_log_data.psu_id"] && !logData["raw_api_log_data.url"].includes('confirmation-of-payee') && !logData["raw_api_log_data.url"].includes('balances')
+  //       })
+  //       if (filterData.length > 0) {
+  //         const lastRecord = filterData[0];
+  //         const lastRecordTime = new Date(lastRecord["raw_api_log_data.timestamp"]);
+  //         const currentRecordTime = new Date(record["raw_api_log_data.timestamp"]);
+  //         const timeDiff = Math.abs(currentRecordTime.getTime() - lastRecordTime.getTime());
+  //         const hours = Math.ceil(timeDiff / (1000 * 60 * 60));
+  //         console.log('iam time diff', hours)
+  //         if (hours <= 2) {
+  //           api_hub_fee = 0.5 / this.aedConstant;
+  //           discounted = true
+  //         }
+  //       }
+  //     } else if (isChargeable && record["raw_api_log_data.url"]?.includes('insurance')) {
+  //       api_hub_fee = 12.5 / this.aedConstant;
+  //     }
+
+  //     group = groupData?.key_name || "Other";
+  //     if (groupData?.key_name == 'balance' || groupData?.key_name == 'confirmation') {
+  //       group = "data";
+  //     }
+  //     return {
+  //       ...record,
+  //       group: group,
+  //       type: groupData?.key_name == 'payment-bulk' || groupData?.key_name == 'payment-non-bulk' ? this.getType(record) : 'NA',
+  //       discountType: groupData?.key_name == 'balance' || groupData?.key_name == 'confirmation' ? groupData?.key_name : null,
+  //       api_category: groupData?.api_category || null,
+  //       chargeable: isChargeable,
+  //       lfiChargable: islfiChargable,
+  //       success: success,
+  //       discounted: discounted,
+  //       api_hub_fee: isChargeable ? api_hub_fee : 0,
+  //     };
+
+  //   }));
+  //   return updatedData;
+  // }
+  async determineChargeableAndSuccess(data: any[], apiData: any[]) {
+    const chargableUrls = apiData
+      .filter(api => api.chargeable_api_hub_fee === true)
+      .map(api => `${api.api_spec}${api.api_endpoint}:${api.api_operation.toUpperCase()}`);
+
+    const lfiChargableUrls = apiData
+      .filter(api => api.chargeable_LFI_TPP_fee === true)
+      .map(api => `${api.api_spec}${api.api_endpoint}:${api.api_operation.toUpperCase()}`);
+
+    return data.map(record => {
+      const isChargeable = chargableUrls.includes(`${record["raw_api_log_data.url"]}:${record["raw_api_log_data.http_method"]}`);
+      const islfiChargable = lfiChargableUrls.includes(`${record["raw_api_log_data.url"]}:${record["raw_api_log_data.http_method"]}`);
+      const success = /^2([a-zA-Z0-9]{2}|\d{2})$/.test(record["raw_api_log_data.tpp_response_code_group"]) &&
+        /^2([a-zA-Z0-9]{2}|\d{2})$/.test(record["raw_api_log_data.lfi_response_code_group"]);
+
+      return {
+        ...record,
+        chargeable: isChargeable,
+        lfiChargable: islfiChargable,
+        success,
+      };
+    });
+  }
+
+  async calculateApiHubFee(processedData: any[], apiData: any[], aedConstant: number) {
+    return await Promise.all(processedData.map(async record => {
+      let discounted = false;
+      let api_hub_fee = 2.5 / aedConstant;
+
+      const groupData = apiData.find(api =>
+        `${api.api_spec}${api.api_endpoint}:${api.api_operation.toUpperCase()}`
+          .replace(/\s+/g, '') ===
+        `${record["raw_api_log_data.url"]}:${record["raw_api_log_data.http_method"].toUpperCase()}`
+          .replace(/\s+/g, '')
+      );
+
+      let group = groupData?.key_name || "Other";
+
+      if (groupData?.key_name === 'balance' || groupData?.key_name === 'confirmation') {
+        group = "data";
+      }
+
+      if (record.chargeable && record.success &&
+        (record["raw_api_log_data.url"].includes('confirmation-of-payee') || record["raw_api_log_data.url"].includes('balances'))) {
+        const filterData = processedData.filter(logData =>
+          logData["raw_api_log_data.psu_id"] === record["raw_api_log_data.psu_id"] && logData.chargeable &&
+          logData.success &&
+          !logData["raw_api_log_data.url"].includes('confirmation-of-payee') &&
+          !logData["raw_api_log_data.url"].includes('balances')
+        );
+
         if (filterData.length > 0) {
           const lastRecord = filterData[0];
           const lastRecordTime = new Date(lastRecord["raw_api_log_data.timestamp"]);
           const currentRecordTime = new Date(record["raw_api_log_data.timestamp"]);
           const timeDiff = Math.abs(currentRecordTime.getTime() - lastRecordTime.getTime());
           const hours = Math.ceil(timeDiff / (1000 * 60 * 60));
-          console.log('iam time diff', hours)
+
           if (hours <= 2) {
-            api_hub_fee = 0.5 / this.aedConstant;
-            discounted = true
+            api_hub_fee = 0.5 / aedConstant;
+            discounted = true;
           }
         }
-      } else if (isChargeable && record["raw_api_log_data.url"]?.includes('insurance')) {
-        api_hub_fee = 12.5 / this.aedConstant;
+      } else if (record.chargeable && record.success && record.group === 'insurance') {
+        api_hub_fee = 12.5 / aedConstant;
       }
+
       return {
         ...record,
-        chargeable: isChargeable,
-        lfiChargable: islfiChargable,
-        success: success,
-        discounted: discounted,
-        api_hub_fee: isChargeable ? api_hub_fee : 0,
+        group,
+        type: groupData?.key_name === 'payment-bulk' || groupData?.key_name === 'payment-non-bulk' ? this.getType(record) : 'NA',
+        discountType: groupData?.key_name === 'balance' || groupData?.key_name === 'confirmation' ? groupData?.key_name : null,
+        api_category: groupData?.api_category || null,
+        discounted,
+        api_hub_fee: record.chargeable ? api_hub_fee : 0,
       };
+    }));
+  }
 
-    });
-    return updatedData;
+  async chargableConvertion(data: any) {
+    try {
+      const apiData = await this.apiModel.find({
+        $or: [
+          { chargeable_api_hub_fee: true },
+          { chargeable_LFI_TPP_fee: true }
+        ]
+      });
+
+      const processedData = await this.determineChargeableAndSuccess(data, apiData);
+      const updatedData = await this.calculateApiHubFee(processedData, apiData, this.aedConstant);
+
+      return updatedData;
+    } catch (error) {
+      console.error("Error in chargableConvertion:", error);
+      throw new Error("Chargeable conversion failed");
+    }
   }
 
 
-  async setGroup(mergedData: any[]) {
-    let group = "other";
-    let type = "NA"
-    return mergedData.map(logEntry => {
-      if (logEntry["payment_logs.number_of_successful_transactions"] != null && logEntry["raw_api_log_data.url"].split("/").pop() == "file-payments") { // Payments (bulk) - Need to add the condition to check if the payment is fully settled
-        group = "payment-bulk";
-        type = this.getType(logEntry);
-      } else if (this.payment_type_consents.includes(logEntry["payment_logs.payment_consent_type"]) && logEntry["raw_api_log_data.url"].split("/").pop() == "payments") {
-        group = "payment-non-bulk";
-        type = this.getType(logEntry);
-      } else if (logEntry["raw_api_log_data.url"]?.indexOf("insurance") > -1) {
-        group = "insurance";
-        type = this.getType(logEntry);
-      } else {
-        group = "data";
-        type = this.getType(logEntry);
-      }
-      return {
-        ...logEntry,
-        'group': group,
-        'type': type
-      };
-    });
 
-  }
   getType(logEntry: any) {
-    let type = "other";
+    let type = "NA";
     if (logEntry["payment_logs.merchant_id"] != null) {
       type = "merchant";
     } else if (this.peer_to_peer_types.includes(logEntry["raw_api_log_data.payment_type"])) {

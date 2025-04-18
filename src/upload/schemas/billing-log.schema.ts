@@ -188,6 +188,9 @@ export class Log {
   discounted: boolean;
 
   @Prop()
+  discountType: string;
+
+  @Prop()
   group: string;
 
   @Prop()
@@ -204,6 +207,18 @@ export class Log {
 
   @Prop()
   numberOfPages: number;
+
+  @Prop()
+  unit_price: number;
+
+  @Prop()
+  chargeableAmount: number;
+
+  @Prop()
+  appliedLimit: number;
+
+  @Prop()
+  limitApplied: boolean;
 
   @Prop({ type: [MerchantDailyData] })
   result: MerchantDailyData[];
