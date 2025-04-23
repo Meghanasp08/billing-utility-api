@@ -54,6 +54,9 @@ export class RawApiLogData {
   payment_type: string;
 
   @Prop()
+  payment_id: string;
+
+  @Prop()
   paymentid: string;
 
   @Prop()
@@ -90,6 +93,9 @@ export class PaymentLogs {
 
   @Prop()
   tpp_client_id: string;
+
+  @Prop()
+  status: string;
 
   @Prop()
   currency: string;
@@ -200,6 +206,9 @@ export class Log {
   api_hub_fee: number;
 
   @Prop()
+  api_category: number;
+
+  @Prop()
   calculatedFee: number;
 
   @Prop()
@@ -212,7 +221,7 @@ export class Log {
   unit_price: number;
 
   @Prop()
-  chargeableAmount: number;
+  volume: number;
 
   @Prop()
   appliedLimit: number;
@@ -220,8 +229,15 @@ export class Log {
   @Prop()
   limitApplied: boolean;
 
-  @Prop({ type: [MerchantDailyData] })
-  result: MerchantDailyData[];
+  @Prop()
+  isCapped: boolean;
+
+  @Prop()
+  cappedAt: number;
+
+
+  // @Prop({ type: [MerchantDailyData] })
+  // result: MerchantDailyData[];
 }
 
 export const LogSchema = SchemaFactory.createForClass(Log);

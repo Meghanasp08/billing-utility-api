@@ -81,8 +81,8 @@ export class UploadService {
         .on('error', reject);
     });
 
-    console.log(file1Data.length, 'raw api record')
-    console.log(file2Data.length, 'raw api record')
+    // console.log(file1Data.length, 'raw api record')
+    // console.log(file2Data.length, 'raw api record')
 
     const mergedData: any[] = [];
     for (let i = 0; i < file1Data.length; i++) {
@@ -94,7 +94,7 @@ export class UploadService {
         [`raw_api_log_data.lfi_id`]: rawApiRecord.lfiId || null,
         [`raw_api_log_data.tpp_id`]: rawApiRecord.tppId || null,
         [`raw_api_log_data.tpp_client_id`]: rawApiRecord.tppClientId || null,
-        [`raw_api_log_data.api_set_(sub)`]: rawApiRecord.apiSet || null,
+        [`raw_api_log_data.api_set_sub`]: rawApiRecord.apiSet || null,
         [`raw_api_log_data.http_method`]: rawApiRecord.httpMethod || null,
         [`raw_api_log_data.url`]: rawApiRecord.url || null,
         [`raw_api_log_data.tpp_response_code_group`]: rawApiRecord.tppResponseCodeGroup || null,
@@ -168,27 +168,29 @@ export class UploadService {
     // return pagesFeeApplied;
 
     const pageDataCalculation = await this.attendedUpdateOnNumberOfPage(pagesFeeApplied);
-    // return pageDataCalculation;
-    const billData = await this.logModel.insertMany(pagesFeeApplied);
-    return billData.length;
+    return pageDataCalculation;
+    // const billData = await this.logModel.insertMany(pagesFeeApplied);
+    // return billData.length;
   }
   async attendedUpdateOnNumberOfPage(data: any) {
     let lfiPageDataArray: any[] = [];
+    // console.log('iam data', data)
     const updatedData = data.map((record: any) => {
       if (record.lfiResult && record.lfiResult.length > 0) {
         const outerData = record.lfiResult.find(txn => txn.paymentId == record['payment_logs.payment_id']);
-        console.log('iam outer data', outerData)
-        record.calculatedFee = outerData.charge;
+        if (!outerData) return record;
+        record.calculatedFee = outerData?.charge;
         record.applicableFee = record.calculatedFee
-        lfiPageDataArray.push(record.lfiResult, record.summary)
+        lfiPageDataArray.push(record?.lfiResult, record?.summary)
         delete record.lfiResult;
         delete record.summary;
         return {
           ...record,
           appliedLimit: outerData.appliedLimit,
-          chargeableAmount: outerData.chargeableAmount,
+          volume: outerData.chargeableAmount,
+          limitApplied: outerData.appliedLimit > 0,
           // charge: outerData.charge,
-          unit_price: outerData.mdp_rate,
+          unit_price: record['raw_api_log_data.is_large_corporate'] ? 40 / this.aedConstant : outerData.mdp_rate,
         };
       }
 
@@ -196,12 +198,15 @@ export class UploadService {
     });
 
     const uniqueLfiPageData = await this.processData(lfiPageDataArray);
-    const existingMulti = await this.pageMultiplier.findOne({
-      "summary.psuId": uniqueLfiPageData.summary.psuId,
-      'summary.date': uniqueLfiPageData.summary.date
-    });
-    if (!existingMulti) {
-      const lfiPageData = await this.pageMultiplier.insertMany(uniqueLfiPageData);
+    if (!uniqueLfiPageData.summary.psuId !== null && !uniqueLfiPageData.summary.date! == null) {
+      const existingMulti = await this.pageMultiplier.findOne({
+        "summary.psuId": uniqueLfiPageData.summary.psuId,
+        'summary.date': uniqueLfiPageData.summary.date
+      });
+      console.log('iam unique data', uniqueLfiPageData)
+      if (!existingMulti) {
+        const lfiPageData = await this.pageMultiplier.insertMany(uniqueLfiPageData);
+      }
     }
 
     return updatedData;
@@ -301,6 +306,8 @@ export class UploadService {
           const date = new Date(timestamp).toISOString().split("T")[0];
           const key = `${psuId}_${date}_${isAttended}`;
 
+          // console.log('iam key', key)
+
           if (!psuGroupedMap[key]) {
             psuGroupedMap[key] = {
               psuId,
@@ -335,13 +342,15 @@ export class UploadService {
             const isAttended = record["raw_api_log_data.is_attended"];
             const key = `${psuId}_${date}_${isAttended}`;
 
+            console.log('iam key', key)
+            console.log('iam bool data', isAttended)
+
             const margin =
-              Boolean(isAttended) === true
+              isAttended === '1'
                 ? lfiData.free_limit_attended
-                : Boolean(isAttended) === false
+                : isAttended === '0'
                   ? lfiData.free_limit_unattended
                   : 0;
-
             const lfiMdpMultiplier = record['raw_api_log_data.is_large_corporate'] ? 40 / this.aedConstant : lfiData.mdp_rate;
 
             const chargesData = psuGroupedMap[key];
@@ -369,7 +378,7 @@ export class UploadService {
               };
             });
 
-
+            console.log('iam procesed transaction', processedTransactions)
             const totalCharge = processedTransactions.reduce((acc, txn) => acc + txn.charge, 0);
 
             const customerCharge = {
@@ -488,15 +497,27 @@ export class UploadService {
         let numberOfPages = 0;
         let result: any[] = [];
         let unit_price = 0;
-        let chargeableAmount = 0;
+        let volume = 0;
         let appliedLimit = 0;
         let limitApplied = false;
+        let isCapped: boolean = false;
+        let cappedAt = 0;
         if (record.lfiChargable && record.success) {
 
           if (record.group === "payment-bulk" && Boolean(record['raw_api_log_data.is_large_corporate'])) {
-            calculatedFee = 250 / this.aedConstant;
-            applicableFee = calculatedFee;
-            record.type = "corporate";
+            // calculatedFee = 250 / this.aedConstant;
+            // applicableFee = calculatedFee;
+            // record.type = "corporate";
+            return {
+              ...record,
+              calculatedFee: parseFloat((parseInt(record["payment_logs.number_of_successful_transactions"]) * 250 / this.aedConstant).toFixed(3)),
+              applicableFee: parseFloat((parseInt(record["payment_logs.number_of_successful_transactions"]) * 250 / this.aedConstant).toFixed(3)), // Ensure `applicableFee` is also set
+              type: "corporate",
+              unit_price: 250 / this.aedConstant,
+              volume: parseInt(record["payment_logs.number_of_successful_transactions"]),
+              isCapped: false,
+              cappedAt: 0,
+            }
           }
 
           // MERCHANT CALCULATION
@@ -505,10 +526,14 @@ export class UploadService {
             if (record["raw_api_log_data.payment_type"] === 'LargeValueCollection') {
               // calculatedFee = parseInt(record["payment_logs.amount"]) * 0.0038;
               // applicableFee = calculatedFee > 4 ? 4 : calculatedFee;
-              calculatedFee = parseFloat((parseInt(record["payment_logs.amount"]) * 0.0038).toFixed(3));
-              applicableFee = parseFloat((calculatedFee > 4 ? 4 : calculatedFee).toFixed(3));
-              unit_price = 0.0038;
-              chargeableAmount = parseInt(record["payment_logs.amount"]);
+              // calculatedFee = parseFloat((parseInt(record["payment_logs.amount"]) * 0.0038).toFixed(3));  //numberof succes trans * 4 AED
+              calculatedFee = parseFloat((parseInt(record["payment_logs.number_of_successful_transactions"]) * 4).toFixed(3));
+              // applicableFee = parseFloat((calculatedFee > 4 ? 4 : calculatedFee).toFixed(3));
+              applicableFee = calculatedFee
+              unit_price = 4;
+              volume = parseInt(record["payment_logs.number_of_successful_transactions"]);
+              // isCapped = calculatedFee > 4; // Assign boolean value
+              // cappedAt = isCapped ? 4 : 0;
             } else {
               const date = new Date(record["raw_api_log_data.timestamp"]).toISOString().split("T")[0];
               const key = `${record["payment_logs.merchant_id"]}_${date}`;
@@ -525,15 +550,19 @@ export class UploadService {
                 );
 
                 if (filteredTransaction) {
-                  console.log('iam filtered transaction', filteredTransaction);
                   // calculatedFee = filteredTransaction.chargeableAmount * 0.0038;
                   // applicableFee = parseInt(record["payment_logs.amount"]) > 20000 ? 50 : calculatedFee;
                   calculatedFee = parseFloat((filteredTransaction.chargeableAmount * 0.0038).toFixed(3));
+                  console.log('iam payment', record["payment_logs.amount"])
                   applicableFee = parseFloat((parseInt(record["payment_logs.amount"]) > 20000 ? 50 : calculatedFee).toFixed(3));
+                  console.log('iam applicable fee', applicableFee)
                   unit_price = 0.0038;
-                  chargeableAmount = filteredTransaction.chargeableAmount;
+                  volume = filteredTransaction.chargeableAmount;
                   appliedLimit = filteredTransaction.appliedLimit;
-                  limitApplied = merchantGroup.limitApplied;
+                  // limitApplied = merchantGroup.limitApplied;
+                  limitApplied = filteredTransaction.appliedLimit > 0;
+                  isCapped = parseInt(record["payment_logs.amount"]) > 20000; // Assign boolean value
+                  cappedAt = isCapped ? 50 : 0;
 
                 }
               }
@@ -544,28 +573,37 @@ export class UploadService {
           // PEER-2-PEER
           else if (record.type === 'peer-2-peer') {
             if (record["raw_api_log_data.payment_type"] === 'LargeValueCollection') {
-              calculatedFee = parseFloat((parseInt(record["payment_logs.amount"]) * 0.0038).toFixed(3));
-              applicableFee = parseFloat((calculatedFee > 4 ? 4 : calculatedFee).toFixed(3));
-              unit_price = 0.0038;
-              chargeableAmount = parseInt(record["payment_logs.amount"]);
+              calculatedFee = parseFloat((parseInt(record["payment_logs.number_of_successful_transactions"]) * 4).toFixed(3));
+              // applicableFee = parseFloat((calculatedFee > 4 ? 4 : calculatedFee).toFixed(3));
+              applicableFee = calculatedFee
+              unit_price = 4;
+              volume = parseInt(record["payment_logs.number_of_successful_transactions"]);
+              // isCapped = calculatedFee > 4; // Assign boolean value
+              // cappedAt = isCapped ? 4 : 0;
+
             } else {
-              calculatedFee = parseFloat((25 / this.aedConstant).toFixed(3));
+              calculatedFee = parseFloat((parseInt(record["payment_logs.number_of_successful_transactions"]) * (25 / this.aedConstant)).toFixed(3));
+
               applicableFee = parseFloat((record.group === "payment-bulk"
                 ? (calculatedFee > 2.50 ? 2.50 : calculatedFee)
                 : calculatedFee).toFixed(3));
+              unit_price = 25 / this.aedConstant;
+              volume = parseInt(record["payment_logs.number_of_successful_transactions"]);
+              isCapped = record.group === "payment-bulk" ? calculatedFee > 2.50 ? true : false : false; // Assign boolean value
+              cappedAt = isCapped ? 2.50 : 0;
             }
           }
 
           // ME-2-ME
           else if (record.type === 'me-2-me') {
-            // calculatedFee = 20 / this.aedConstant;
-            // applicableFee = record.group === "payment-bulk"
-            //   ? calculatedFee > 250 ? 250 : calculatedFee
-            //   : calculatedFee;
-            calculatedFee = parseFloat((25 / this.aedConstant).toFixed(3));
+            calculatedFee = parseFloat((parseInt(record["payment_logs.number_of_successful_transactions"]) * (20 / this.aedConstant)).toFixed(3));
             applicableFee = parseFloat((record.group === "payment-bulk"
               ? (calculatedFee > 2.50 ? 2.50 : calculatedFee)
               : calculatedFee).toFixed(3));
+            unit_price = 20 / this.aedConstant;
+            volume = parseInt(record["payment_logs.number_of_successful_transactions"]);
+            isCapped = record.group === "payment-bulk" ? calculatedFee > 2.50 ? true : false : false; // Assign boolean value
+            cappedAt = isCapped ? 2.50 : 0;
           }
 
           // OTHER
@@ -588,9 +626,11 @@ export class UploadService {
           calculatedFee,
           applicableFee,
           unit_price,
-          chargeableAmount,
+          volume,
           appliedLimit,
           limitApplied,
+          isCapped,
+          cappedAt,
           // result,
           numberOfPages,
         };
@@ -609,7 +649,6 @@ export class UploadService {
 
       // Process each unique merchant
       if (uniqueMerchants.length > 0) {
-        console.log('Unique merchants:', uniqueMerchants);
 
         for (const merchant of uniqueMerchants) {
           const existingMerchant = await this.merchantLimitModel.findOne({ merchantId: merchant.merchantId });
@@ -732,8 +771,11 @@ export class UploadService {
 
   async calculateApiHubFee(processedData: any[], apiData: any[], aedConstant: number) {
     return await Promise.all(processedData.map(async record => {
+      console.log(record["raw_api_log_data.http_method"], ':', record["raw_api_log_data.purpose"], processedData.length, 'iam http method',)
+
       let discounted = false;
       let api_hub_fee = 2.5 / aedConstant;
+
 
       const groupData = apiData.find(api =>
         `${api.api_spec}${api.api_endpoint}:${api.api_operation.toUpperCase()}`
@@ -769,8 +811,10 @@ export class UploadService {
             discounted = true;
           }
         }
-      } else if (record.chargeable && record.success && record.group === 'insurance') {
+      } else if (record.chargeable && record.success && group === 'insurance') {
         api_hub_fee = 12.5 / aedConstant;
+      } else if (!record.chargeable || !record.success) {
+        api_hub_fee = 0;
       }
 
       return {
