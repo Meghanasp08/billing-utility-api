@@ -12,16 +12,55 @@ export class DashboardService {
   ) { }
 
   async findAll() {
+    const [
+      totalInvoicesResult,
+      totalInvoiceAmountResult,
+      avgInvoiceAmountResult,
+      invoicePaidResult,
+      noOfTppsResult,
+      noOfLfisResult,
+      apiHubFee,
+      lfiToTppFee,
+      paidUnpaidInvoicesResult
+    ] = await Promise.all([
+      this.getTotalInvoices(),
+      this.getTotalRevenue(),
+      this.getAvgInvoiceAmount(),
+      this.invoicePaid(),
+      this.getNoOfTpps(),
+      this.getNoOfLfis(),
+      this.getApiHubFee(),
+      this.getLfiToTppFee(),
+      this.getPaidUnpaidInvoices()
+    ]);
+  
     return {
-      totalInvoices: await this.getTotalInvoices().then(res => res[0]?.total || 0),
-      totalInvoiceAmount: await this.getTotalRevenue().then(res => res[0]?.total || 0),
-      avgInvoiceAmount: await this.getAvgInvoiceAmount().then(res => res[0]?.avg || 0),
-      noOfTpps: await this.getNoOfTpps().then(res => res[0]?.total || 0),
-      noOfLfis: await this.getNoOfLfis().then(res => res[0]?.total || 0),
-      apiHubFee: await this.getApiHubFee(),
-      lfiToTppFee: await this.getLfiToTppFee(),
-    }
+      totalInvoices: totalInvoicesResult[0]?.total || 0,
+      totalInvoiceAmount: totalInvoiceAmountResult[0]?.total || 0,
+      avgInvoiceAmount: avgInvoiceAmountResult[0]?.avg || 0,
+      invoicePaid: invoicePaidResult[0]?.totalPaid || 0,
+      noOfTpps: noOfTppsResult[0]?.total || 0,
+      noOfLfis: noOfLfisResult[0]?.total || 0,
+      apiHubFee,
+      lfiToTppFee,
+      paidUnpaidInvoices: paidUnpaidInvoicesResult[0],
+    };
   }
+
+  // async findAll() {
+
+  //   return {
+  //     totalInvoices: await this.getTotalInvoices().then(res => res[0]?.total || 0),
+  //     totalInvoiceAmount: await this.getTotalRevenue().then(res => res[0]?.total || 0),
+  //     avgInvoiceAmount: await this.getAvgInvoiceAmount().then(res => res[0]?.avg || 0),
+  //     invoicePaid: await this.invoicePaid().then(res => res[0]?.totalPaid  || 0),
+  //     noOfTpps: await this.getNoOfTpps().then(res => res[0]?.total || 0),
+  //     noOfLfis: await this.getNoOfLfis().then(res => res[0]?.total || 0),
+  //     apiHubFee: await this.getApiHubFee(),
+  //     lfiToTppFee: await this.getLfiToTppFee(),
+  //     paidUnpaidInvoices: await this.getPaidUnpaidInvoices().then(res => res[0]),
+  //   }
+  // }
 
   async getTotalInvoices() {
     return await this.invoiceModel.aggregate([
@@ -106,6 +145,39 @@ export class DashboardService {
     }
   }
 
+  async getPaidUnpaidInvoices(){
+    return this.invoiceModel.aggregate([
+      {
+        $group: {
+          _id: null,
+          paid: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 1] }, 1, 0]
+            }
+          },
+          unpaid: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 0] }, 1, 0]
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          paid: 1,
+          unpaid: 1
+        }
+      }
+    ]).exec();  
+  }
+
+  async invoicePaid() {
+    return await this.invoiceModel.aggregate([
+      { $match: { status: 1 } }, 
+      { $group: { _id: null, totalPaid: { $sum: "$total_amount" } } }  
+    ]).exec()
+  }
 
 }
 
