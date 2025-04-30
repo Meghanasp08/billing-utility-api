@@ -133,7 +133,7 @@ export class UploadController {
             ];
             const downloadCsv = true
 
-            const mergedFilePath = await this.uploadService.mergeCsvFiles(req.user.email, raw_dataPath, payment_dataPath, downloadCsv);
+            const mergedFilePath = await this.uploadService.mergeCsvFiles('byPass', raw_dataPath, payment_dataPath, downloadCsv);
 
             // return {
             //     message: 'Merged CCV File generated Successfully',
