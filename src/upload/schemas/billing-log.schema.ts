@@ -45,7 +45,7 @@ export class RawApiLogData {
   lfi_response_code_group: string;
 
   @Prop()
-  is_attended: string;
+  is_attended: boolean;
 
   @Prop()
   records: number;
@@ -66,7 +66,7 @@ export class RawApiLogData {
   psu_id: string;
 
   @Prop()
-  is_large_corporate: string;
+  is_large_corporate: boolean;
 
   @Prop()
   user_type: string;
@@ -122,13 +122,13 @@ export class PaymentLogs {
   psu_id: string;
 
   @Prop()
-  is_large_corporate: string;
+  is_large_corporate: boolean;
 
   @Prop()
   number_of_successful_transactions: number;
 
   @Prop()
-  international_payment: string;
+  international_payment: boolean;
 }
 
 export const PaymentLogsSchema = SchemaFactory.createForClass(PaymentLogs);
