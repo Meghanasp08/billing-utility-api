@@ -21,7 +21,7 @@ export class InvoiceController {
       throw error;
     }
   }
-    
+
   @Get('collection-memo')
   async findAllCollectionMemo(@Query(ValidationPipe) PaginationDTO: PaginationDTO) {
     try {
@@ -37,10 +37,55 @@ export class InvoiceController {
     }
   }
 
+  @Get('collection-memo/:id')
+  async findCollectionMemoById(@Param('id') id: string) {
+    try {
+      const result = await this.invoiceService.findCollectionMemoById(id);
+      return {
+        message: 'Success',
+        result: result,
+        statusCode: HttpStatus.OK,
+      };
+    } catch (error) {
+      console.log(error);
+      throw error;
+    }
+  }
+
   @Post()
   async invoiceCreation(@Body(ValidationPipe) invoiceDto: any,): Promise<any> {
     try {
       const result = await this.invoiceService.invoiceCreation(invoiceDto);
+      return {
+        message: 'Invoice Data',
+        result: result,
+        statusCode: HttpStatus.OK,
+      }
+    } catch (error) {
+      console.log(error);
+      throw error;
+    }
+  }
+  
+  @Post('single-day-creation')
+  async invoiceCreationSingleDay(@Body(ValidationPipe) invoiceDto: any,): Promise<any> {
+    try {
+      const result = await this.invoiceService.invoiceCreationSingleDay();
+      return {
+        message: 'Invoice Data',
+        result: result,
+        statusCode: HttpStatus.OK,
+      }
+    } catch (error) {
+      console.log(error);
+      throw error;
+    }
+  }
+    
+  @Post('monthly-creation')
+  async invoiceCreationMonthlyTpp(@Body(ValidationPipe) invoiceDto: any,): Promise<any> {
+    try {
+      const result = await this.invoiceService.invoiceCreationMonthlyTpp();
       return {
         message: 'Invoice Data',
         result: result,
