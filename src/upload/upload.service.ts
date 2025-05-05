@@ -554,7 +554,7 @@ export class UploadService {
           logUpdate._id,
           {
             $set: {
-              status: 'completed',
+              status: 'Completed',
               remarks: 'Database Process Completed',
             },
             $push: {
