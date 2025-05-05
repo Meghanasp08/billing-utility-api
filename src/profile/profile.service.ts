@@ -95,7 +95,7 @@ export class ProfileService {
             ...(group === 'lfi' && {
               lfi_name: { $first: "$raw_api_log_data.lfi_name" },
             }),
-            total_api_hub_fee: { $sum: "$api_hub_fee" },
+            total_api_hub_fee: { $sum: "$applicableApiHubFee" },
             total_calculated_fee: { $sum: "$calculatedFee" },
             total_applicable_fee: { $sum: "$applicableFee" },
           },
@@ -167,7 +167,7 @@ export class ProfileService {
               group: "$group",
               type: "$type"
             },
-            type_applicable_fee: { $sum: "$api_hub_fee" },
+            type_applicable_fee: { $sum: "$applicableApiHubFee" },
             type_count: { $sum: 1 } // Count of documents contributing to type_applicable_fee
           }
         },
@@ -266,8 +266,8 @@ export class ProfileService {
               }
             },
             "totalCount": { "$sum": 1 },
-            "totalFee": { "$sum": "$api_hub_fee" },
-            "singleHubFee": { "$first": "$api_hub_fee" }
+            "totalFee": { "$sum": "$applicableApiHubFee" },
+            "singleHubFee": { "$first": "$applicableApiHubFee" }
           }
         },
         {
