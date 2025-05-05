@@ -989,9 +989,9 @@ export class UploadService {
                 );
 
                 if (filteredTransaction) {
-                  calculatedFee = parseFloat((filteredTransaction.chargeableAmount * this.variables.nonLargeValueMerchantBps.value).toFixed(3));
+                  calculatedFee = parseFloat((filteredTransaction.chargeableAmount * (this.variables.nonLargeValueMerchantBps.value / 10000)).toFixed(3));
                   applicableFee = parseFloat((parseInt(record["payment_logs.amount"]) > this.variables.nonLargeValueCapMerchantCheck.value ? this.variables.nonLargeValueCapMerchant.value : calculatedFee).toFixed(3));
-                  unit_price = this.variables.nonLargeValueMerchantBps.value;
+                  unit_price = (this.variables.nonLargeValueMerchantBps.value / 10000);
                   volume = filteredTransaction.chargeableAmount ?? 0;
                   appliedLimit = filteredTransaction.appliedLimit;
                   limitApplied = filteredTransaction.appliedLimit > 0;
@@ -1297,7 +1297,8 @@ export class UploadService {
       });
       const search = paginationDTO.search ? paginationDTO.search.trim() : null;
       if (search) {
-        options.$or = [{ "batchNo": search }];
+        const searchRegex = new RegExp(search, "i");
+        options.$or = [{ "batchNo": search }, { "uploadedBy": searchRegex }];
       }
       const total = await this.uploadLog.countDocuments(options).exec();
       const uploadlogData = await this.uploadLog.find(options).skip(offset).limit(limit).sort({ createdAt: -1 }).lean<any>()
