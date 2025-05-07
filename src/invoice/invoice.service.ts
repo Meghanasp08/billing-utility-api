@@ -43,6 +43,15 @@ export class InvoiceService {
             options.$or = [{ "tpp_id": search }, { "tpp_name": searchRegex },];
         }
 
+        const month = Number(PaginationDTO?.month) ?? 0;
+        const year = Number(PaginationDTO?.year) ?? 0;
+
+        if (month && year && month !== 0) {
+
+            options.invoice_month = month
+            options.invoice_year = year
+        }
+        
         const count = await this.invoiceModel.find(options).countDocuments();
         const result = await this.invoiceModel.find(options).skip(offset).limit(limit).sort({ createdAt: -1 }).lean<any>()
 
@@ -88,6 +97,7 @@ export class InvoiceService {
         const futureDate = new Date();
         futureDate.setDate(currentDate.getDate() + 30);
         console.log(startDate, endDate)
+
         for (const tpp of tppData) {
             const result = await this.logsModel.aggregate(
                 [
@@ -1472,7 +1482,7 @@ export class InvoiceService {
 
         const config = collection_memo_config;
         const counter = await this.CounterModel.findOne({ key: 'collection_memo_counter' });
-        
+
         if (counter) {
 
             await this.CounterModel.findOneAndUpdate(
@@ -1796,18 +1806,20 @@ export class InvoiceService {
             ? Number(PaginationDTO.limit)
             : PaginationEnum.LIMIT;
         const options: any = {};
-        // const status =
-        //     PaginationDTO.status != null && PaginationDTO.status != 'all'
-        //         ? PaginationDTO.status
-        //         : null;
-        // Object.assign(options, {
-        //     ...(status === null ? { status: { $ne: null } } : { status: status }),
-        // });
+        
         const search = PaginationDTO.search ? PaginationDTO.search.trim() : null;
         if (search) {
             const searchRegex = new RegExp(search, "i");
             options.$or = [{ "lfi_id": search }, { "lfi_name": searchRegex }
             ];
+        }
+        const month = Number(PaginationDTO?.month) ?? 0;
+        const year = Number(PaginationDTO?.year) ?? 0;
+
+        if (month && year && month !== 0) {
+
+            options.invoice_month = month
+            options.invoice_year = year
         }
 
         const count = await this.collectionMemoModel.find(options).countDocuments();
@@ -3289,11 +3301,11 @@ export class InvoiceService {
 
         .billing-label {
             width: 183px;
-            color: #6c5c98;
+            color: #1b194f;
             font-weight: 500;
         }
         .billing-sub-label{
-            color: #6c5c98;
+            color: #1b194f;
         }
 
         .statement-summary {
@@ -3636,7 +3648,7 @@ export class InvoiceService {
 
 
         <div class="billing-info">
-            <h3>Billed To:</h3>
+            <h3 class="billing-sub-label">Billed To:</h3>
             <div class="billing-row">
                 <div class="billing-label">TPP NAME :</div>
                 <div class="billing-sub-label">${data.tpp_name}</div>
@@ -3655,12 +3667,12 @@ export class InvoiceService {
                 <div class="billing-sub-label">AED </div>
             </div>
             <div class="billing-row">
-                <div class="billing-label">TPP Technologies TRN: </div>
-                <div class="billing-sub-label" >TPP123456</div>
+                <div class="billing-label">TPP TRN: </div>
+                <div class="billing-sub-label" ></div>
             </div>
             <div class="billing-row">
                 <div class="billing-label">Nebras TRN: </div>
-                <div class="billing-sub-label">NEB123456</div>
+                <div class="billing-sub-label"></div>
             </div>
             <div class="billing-row">
                 <div class="billing-label">Period: </div>
@@ -3766,7 +3778,7 @@ export class InvoiceService {
                         <div class="billing-sub-label">AED </div>
                     </div>
                     <div class="billing-row">
-                        <div class="billing-label">TPP Technologies TRN: </div>
+                        <div class="billing-label">TPP TRN: </div>
                         <div class="billing-sub-label" >TPP123456</div>
                     </div>
                   
@@ -3779,7 +3791,7 @@ export class InvoiceService {
               
                     <div class="billing-row">
                         <div class="billing-label">Nebras TRN: </div>
-                        <div class="billing-sub-label">NEB123456</div>
+                        <div class="billing-sub-label"></div>
                     </div>
                
         
@@ -3809,10 +3821,6 @@ export class InvoiceService {
                             <tr class="">
                                 <td class="sub-total-row " colspan="6">SUB TOTAL</td>
                                 <td class="table-total">${serviceInitiationItem?.sub_total ?? 0}</td>
-                            </tr>
-                            <tr class="vat-row">
-                                <td class="sub-total-row " colspan="6">VAT</td>
-                                <td class="table-total">${serviceInitiationItem?.vat_amount ?? 0}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -3950,7 +3958,49 @@ export class InvoiceService {
     </div>
                 `
     }
+
     async footer_template() {
+        return `<div style="width: 100%; text-align: center; padding-top: 20px;">
+<svg width="800" height="110" xmlns="http://www.w3.org/2000/svg">
+<!-- Gradient definition -->
+<defs>
+<linearGradient id="bottomGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" stop-color="#1b194f" />
+<stop offset="100%" stop-color="#4ab0a3" />
+</linearGradient>
+</defs>
+ 
+    <!-- Line separator -->
+<!-- <line x1="10" y1="17" x2="700" y2="10" stroke="#eee" stroke-width="1" /> -->
+ 
+    <!-- English text - left side -->
+<text x="50" y="40" fill="#1b194f" style="font-size: 12px; font-family: Arial, sans-serif;">
+      Nebras Open Finance LLC
+</text>
+<text x="50" y="60" fill="#1b194f" style="font-size: 12px; font-family: Arial, sans-serif;">
+      11th Floor, EIF Building, Sultan Bin Zayed The First St
+</text>
+<text x="50" y="80" fill="#1b194f" style="font-size: 12px; font-family: Arial, sans-serif;">
+      Al Nahyan, Abu Dhabi, United Arab Emirates
+</text>
+ 
+    <!-- Arabic text - right side -->
+<text x="770" y="40" fill="#1b194f" text-anchor="end" style="font-size: 12px; font-family: Arial, sans-serif;">
+      نبراس للتمويل المفتوح ذ.م.م
+</text>
+<text x="770" y="60" fill="#1b194f" text-anchor="end" style="font-size: 12px; font-family: Arial, sans-serif;">
+      الطابق 11، بناء صندوق الإمارات للاستثمار، شارع سلطان بن زايد الأول
+</text>
+<text x="770" y="80" fill="#1b194f" text-anchor="end" style="font-size: 12px; font-family: Arial, sans-serif;">
+      آل نهيان، أبوظبي، الإمارات العربية المتحدة
+</text>
+ 
+    <!-- Bottom bar with gradient -->
+<rect x="50" y="100" width="720" height="15" fill="url(#bottomGradient)" />
+</svg>
+</div>`
+    }
+    async footer_template_old() {
         return `
                 <style>
                     .footer {
@@ -4183,7 +4233,7 @@ export class InvoiceService {
             <tbody>
                 ${revenue_data}
                 <tr class="vat">
-                    <td colspan="4">VAT</td>
+                    <td colspan="4">Total VAT</td>
                     <td class="table-total">${total_vat}</td>
                 </tr>
                 <tr class="sub-total">

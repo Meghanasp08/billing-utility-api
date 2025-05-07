@@ -40,4 +40,6 @@ export class PaginationDTO {
 
     fromDate: Date
     toDate: Date
+    month:Number
+    year:Number
 }
