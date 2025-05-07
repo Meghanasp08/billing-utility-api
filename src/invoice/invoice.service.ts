@@ -6,7 +6,6 @@ import { Model, Types } from 'mongoose';
 import { PaginationEnum, } from 'src/common/constants/constants.enum';
 import { PaginationDTO } from 'src/common/dto/common.dto';
 const puppeteer = require('puppeteer')
-
 @Injectable()
 export class InvoiceService {
     constructor(
