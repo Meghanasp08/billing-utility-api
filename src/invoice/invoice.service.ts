@@ -51,7 +51,7 @@ export class InvoiceService {
             options.invoice_month = month
             options.invoice_year = year
         }
-        
+
         const count = await this.invoiceModel.find(options).countDocuments();
         const result = await this.invoiceModel.find(options).skip(offset).limit(limit).sort({ createdAt: -1 }).lean<any>()
 
@@ -1384,6 +1384,17 @@ export class InvoiceService {
                             ]
                         }
                     }
+                }, {
+                    '$lookup': {
+                        'from': 'lfi_data',
+                        'localField': '_id',
+                        'foreignField': 'lfi_id',
+                        'as': 'lfi_data'
+                    }
+                }, {
+                    '$unwind': {
+                        'path': '$lfi_data'
+                    }
                 }
                 // {
                 //     '$addFields': {
@@ -1744,41 +1755,42 @@ export class InvoiceService {
                         ]
                     }
                 }
-            }, {
-                '$addFields': {
-                    'vat': {
-                        '$round': [
-                            {
-                                '$multiply': [
-                                    '$full_total', vatDecimal
-                                ]
-                            }, 4
-                        ]
-                    },
-                    'actual_total': {
-                        '$round': [
-                            {
-                                '$add': [
-                                    '$full_total', {
-                                        '$multiply': [
-                                            '$full_total', vatDecimal
-                                        ]
-                                    }
-                                ]
-                            }, 4
-                        ]
-                    }
-                }
-            }
+            },
+            //  {
+            //     '$addFields': {
+            //         'vat': {
+            //             '$round': [
+            //                 {
+            //                     '$multiply': [
+            //                         '$full_total', vatDecimal
+            //                     ]
+            //                 }, 4
+            //             ]
+            //         },
+            //         'actual_total': {
+            //             '$round': [
+            //                 {
+            //                     '$add': [
+            //                         '$full_total', {
+            //                             '$multiply': [
+            //                                 '$full_total', vatDecimal
+            //                             ]
+            //                         }
+            //                     ]
+            //                 }, 4
+            //             ]
+            //         }
+            //     }
+            // }
         ]
         const result = await this.logsModel.aggregate(aggregation);
 
-        const total = result.reduce((sum, item) => sum + item.actual_total, 0);
+        const total = result.reduce((sum, item) => sum + item.full_total, 0);
 
-        const vat = total * vatDecimal;
+        // const vat = total * vatDecimal;
 
         const roundedTotal = Math.round(total * 100) / 100; // 0.23
-        const roundedVat = Math.round(vat * 100) / 100;
+        // const roundedVat = Math.round(vat * 100) / 100;
 
         // const updated_result = await this.ensureCategories(result);
         const tpp_data = {
@@ -1790,8 +1802,8 @@ export class InvoiceService {
             generated_at: new Date(),        // Generate Date
             currency: 'AED',         //AED default
             tpp_data: result,
-            vat_percent: vatPercent, // Default 5 percent
-            vat_total: roundedVat,  // vat percent of invoice total
+            // vat_percent: vatPercent, // Default 5 percent
+            // vat_total: roundedVat,  // vat percent of invoice total
             total_amount: roundedTotal,  // total of invoice array
             status: 1,
         }
@@ -1806,7 +1818,7 @@ export class InvoiceService {
             ? Number(PaginationDTO.limit)
             : PaginationEnum.LIMIT;
         const options: any = {};
-        
+
         const search = PaginationDTO.search ? PaginationDTO.search.trim() : null;
         if (search) {
             const searchRegex = new RegExp(search, "i");
@@ -3127,6 +3139,24 @@ export class InvoiceService {
             //     <td class="right-align">${moment(item?.invoice_date).format('DD-MMM-YY')}</td>
             // </tr>`;
         }
+        let tableHtml = '';
+
+        if (lfi_list && lfi_list.trim() !== '') {
+            tableHtml = `
+                <table>
+                <thead>
+                    <tr>
+                    <th>#</th>
+                    <th>Item</th>
+                    <th class="table-total">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${lfi_list}
+                </tbody>
+                </table>
+            `;
+        }
 
         const serviceInitiationItem = data?.invoice_items.find(item => item.category === 'service_initiation');
         let service_initiation = ''
@@ -3710,18 +3740,9 @@ export class InvoiceService {
                 </tbody>
             </table>
 
-            <table>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Item</th>
-                        <th class="table-total">Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${lfi_list}
-                </tbody>
-            </table>
+            
+            ${tableHtml}
+                
 
             <div class="total-row">
                 Total due <b>${total_due.toFixed(4)}</b> by <b>${moment(data.due_date).format('Do MMMM YYYY')}</b>
