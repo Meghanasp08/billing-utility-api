@@ -5,6 +5,8 @@ import * as moment from 'moment';
 import { Model, Types } from 'mongoose';
 import { PaginationEnum, } from 'src/common/constants/constants.enum';
 import { PaginationDTO } from 'src/common/dto/common.dto';
+import { collection_memo_config, invoice_config } from 'src/config/app.config';
+import { GlobalConfiguration, GlobalConfigurationDocument } from 'src/configuration/schema/global_config.schema';
 const puppeteer = require('puppeteer')
 @Injectable()
 export class InvoiceService {
@@ -16,6 +18,8 @@ export class InvoiceService {
         @InjectModel('CollectionMemo') private readonly collectionMemoModel: Model<any>,
         @InjectModel('SingleDayTppInvoice') private readonly singleDayTppInvoiceModel: Model<any>,
         @InjectModel('SingleDayCollectionMemo') private readonly singleDayCollectionMemoModel: Model<any>,
+        @InjectModel('Counter') private readonly CounterModel: Model<any>,
+        @InjectModel(GlobalConfiguration.name) private globalModel: Model<GlobalConfigurationDocument>
     ) { }
 
     async findAllInvoices(PaginationDTO: PaginationDTO): Promise<any> {
@@ -37,6 +41,15 @@ export class InvoiceService {
         if (search) {
             const searchRegex = new RegExp(search, "i");
             options.$or = [{ "tpp_id": search }, { "tpp_name": searchRegex },];
+        }
+
+        const month = Number(PaginationDTO?.month) ?? 0;
+        const year = Number(PaginationDTO?.year) ?? 0;
+
+        if (month && year && month !== 0) {
+
+            options.invoice_month = month
+            options.invoice_year = year
         }
 
         const count = await this.invoiceModel.find(options).countDocuments();
@@ -70,6 +83,12 @@ export class InvoiceService {
             invoice_year: year
         });
 
+        const vat = await this.globalModel.findOne({
+            key: 'vatPercentageValue',
+        });
+        const vatPercent = vat?.value ?? 5
+        const vatDecimal = vatPercent / 100;
+
         const tppData = await this.tppDataModel.find();
 
         const startDate = new Date(year, month - 1, 1);
@@ -78,18 +97,21 @@ export class InvoiceService {
         const futureDate = new Date();
         futureDate.setDate(currentDate.getDate() + 30);
         console.log(startDate, endDate)
+
         for (const tpp of tppData) {
             const result = await this.logsModel.aggregate(
                 [
                     {
                         $match: {
                             "raw_api_log_data.tpp_id": tpp?.tpp_id,
+                            "chargeable": true,
+                            "success": true,
                             $expr: {
                                 $and: [
                                     {
                                         $eq: [
                                             {
-                                                $month: "$createdAt"
+                                                $month: "$raw_api_log_data.timestamp"
                                             },
                                             month
                                         ]
@@ -97,7 +119,7 @@ export class InvoiceService {
                                     {
                                         $eq: [
                                             {
-                                                $year: "$createdAt"
+                                                $year: "$raw_api_log_data.timestamp"
                                             },
                                             year
                                         ]
@@ -235,10 +257,10 @@ export class InvoiceService {
                                 description: "$paymentTypeLabel"
                             },
                             quantity: {
-                                $sum: 1
+                                $sum: "$apiHubVolume"
                             },
                             unit_price: {
-                                $first: "$applicableApiHubFee"
+                                $first: "$api_hub_fee"
                             },
                             total: {
                                 $sum: "$applicableApiHubFee"
@@ -253,19 +275,19 @@ export class InvoiceService {
                                 description: "$_id.description",
                                 quantity: "$quantity",
                                 unit_price: {
-                                    $round: ["$unit_price", 4]
+                                    $round: ["$unit_price", 3]
                                 },
                                 total: {
-                                    $round: ["$total", 4]
+                                    $round: ["$total", 3]
                                 },
                                 vat_amount: {
-                                    $multiply: ["$total", 0.05]
+                                    $multiply: ["$total", vatDecimal]
                                 },
                                 full_total: {
                                     $add: [
                                         "$total",
                                         {
-                                            $multiply: ["$total", 0.05]
+                                            $multiply: ["$total", vatDecimal]
                                         }
                                     ]
                                 }
@@ -378,7 +400,7 @@ export class InvoiceService {
                             vat_amount: {
                                 $round: [
                                     {
-                                        $multiply: ["$sub_total", 0.05]
+                                        $multiply: ["$sub_total", vatDecimal]
                                     },
                                     4
                                 ]
@@ -389,7 +411,7 @@ export class InvoiceService {
                                         $add: [
                                             "$sub_total",
                                             {
-                                                $multiply: ["$sub_total", 0.05]
+                                                $multiply: ["$sub_total", vatDecimal]
                                             }
                                         ]
                                     },
@@ -416,18 +438,19 @@ export class InvoiceService {
                         '$match': {
                             'raw_api_log_data.tpp_id': tpp?.tpp_id,
                             'lfiChargable': true,
+                            "success": true,
                             '$expr': {
                                 '$and': [
                                     {
                                         '$eq': [
                                             {
-                                                '$month': '$createdAt'
+                                                '$month': '$raw_api_log_data.timestamp'
                                             }, month
                                         ]
                                     }, {
                                         '$eq': [
                                             {
-                                                '$year': '$createdAt'
+                                                '$year': '$raw_api_log_data.timestamp'
                                             }, year
                                         ]
                                     }
@@ -543,10 +566,10 @@ export class InvoiceService {
                                 'label': '$label'
                             },
                             'quantity': {
-                                '$sum': 1
+                                '$sum': "$volume"
                             },
                             'unit_price': {
-                                '$avg': '$applicableFee'
+                                '$first': "$unit_price"
                             },
                             'total': {
                                 '$sum': '$applicableFee'
@@ -561,12 +584,12 @@ export class InvoiceService {
                                     'quantity': '$quantity',
                                     'unit_price': {
                                         '$round': [
-                                            '$unit_price', 4
+                                            '$unit_price', 3
                                         ]
                                     },
                                     'total': {
                                         '$round': [
-                                            '$total', 4
+                                            '$total', 3
                                         ]
                                     }
                                 }
@@ -627,7 +650,7 @@ export class InvoiceService {
                                                     '$round': [
                                                         {
                                                             '$multiply': [
-                                                                '$$item.total', 0.05
+                                                                '$$item.total', vatDecimal
                                                             ]
                                                         }, 4
                                                     ]
@@ -638,7 +661,7 @@ export class InvoiceService {
                                                             '$add': [
                                                                 '$$item.total', {
                                                                     '$multiply': [
-                                                                        '$$item.total', 0.05
+                                                                        '$$item.total', vatDecimal
                                                                     ]
                                                                 }
                                                             ]
@@ -666,7 +689,7 @@ export class InvoiceService {
                                         '$multiply': [
                                             {
                                                 '$sum': '$labels.total'
-                                            }, 0.05
+                                            }, vatDecimal
                                         ]
                                     }, 4
                                 ]
@@ -681,7 +704,7 @@ export class InvoiceService {
                                                 '$multiply': [
                                                     {
                                                         '$sum': '$labels.total'
-                                                    }, 0.05
+                                                    }, vatDecimal
                                                 ]
                                             }
                                         ]
@@ -696,8 +719,8 @@ export class InvoiceService {
 
             const vat = total * 0.05;
 
-            const roundedTotal = Math.round(total * 10000) / 10000;
-            const roundedVat = Math.round(vat * 10000) / 10000;
+            const roundedTotal = Math.round(total * 100) / 100;
+            const roundedVat = Math.round(vat * 100) / 100;
 
             const updated_result = await this.ensureCategories(result);
             const invoice_data = {
@@ -721,7 +744,7 @@ export class InvoiceService {
                 tpp_usage_per_lfi: result_of_lfi,
                 invoice_items: updated_result,
                 // subtotal: 0, // vendaaaa
-                vat_percent: 5, // Default 5 percent
+                vat_percent: vatPercent, // Default 5 percent
                 vat_total: roundedVat,  // vat percent of invoice total
                 total_amount: roundedTotal,  // total of invoice array
                 status: 1,
@@ -749,7 +772,7 @@ export class InvoiceService {
                         tpp_name: tpp?.tpp_name,
                         collection_memo_subitem: obj.labels,
                         full_total: obj?.full_total,
-                        vat_percent: 5,
+                        vat_percent: vatPercent,
                         vat: obj?.vat,
                         actual_total: obj?.actual_total,
                         date: new Date()
@@ -773,7 +796,7 @@ export class InvoiceService {
                     console.log("LFI_NAME", lfiData?.lfi_name)
 
                     const coll_memo_tpp = new this.collectionMemoModel({
-                        invoice_number: await this.generateInvoiceNumber('CLM'),
+                        invoice_number: await this.generateCollectionMemoInvNumber(),
                         lfi_id: obj?._id,
                         lfi_name: lfiData?.lfi_name,
                         billing_period_start: startDate,  // Month First
@@ -934,10 +957,12 @@ export class InvoiceService {
                 {
                     '$match': {
                         'raw_api_log_data.tpp_id': tpp_id,
+                        "chargeable": true,
+                        "success": true,
                         $and: [
                             startDate && endDate
                                 ? {
-                                    createdAt: {
+                                    'raw_api_log_data.timestamp': {
                                         $gte: startDate,
                                         $lte: endDate
                                     }
@@ -1073,13 +1098,13 @@ export class InvoiceService {
                             'description': '$paymentTypeLabel'
                         },
                         'quantity': {
-                            '$sum': 1
+                            '$sum': "$apiHubVolume"
                         },
                         'unit_price': {
-                            '$first': '$applicableApiHubFee'
+                            '$first': "$api_hub_fee"
                         },
                         'total': {
-                            '$sum': '$applicableApiHubFee'
+                            '$sum': "$applicableApiHubFee"
                         }
                     }
                 }, {
@@ -1177,10 +1202,12 @@ export class InvoiceService {
                 {
                     '$match': {
                         'raw_api_log_data.tpp_id': tpp_id,
+                        "lfiChargable": true,
+                        "success": true,
                         $and: [
                             startDate && endDate
                                 ? {
-                                    createdAt: {
+                                    'raw_api_log_data.timestamp': {
                                         $gte: new Date(startDate),
                                         $lte: new Date(endDate)
                                     }
@@ -1301,10 +1328,10 @@ export class InvoiceService {
                             'label': '$label'
                         },
                         'quantity': {
-                            '$sum': 1
+                            '$sum': "$volume"
                         },
                         'unit_price': {
-                            '$avg': '$applicableFee'
+                            '$first': "$unit_price"
                         },
                         'total': {
                             '$sum': '$applicableFee'
@@ -1357,8 +1384,19 @@ export class InvoiceService {
                             ]
                         }
                     }
+                }, {
+                    '$lookup': {
+                        'from': 'lfi_data',
+                        'localField': '_id',
+                        'foreignField': 'lfi_id',
+                        'as': 'lfi_data'
+                    }
+                }, {
+                    '$unwind': {
+                        'path': '$lfi_data'
+                    }
                 }
-                
+
                 // {
                 //     '$addFields': {
                 //         'vat': {
@@ -1412,13 +1450,76 @@ export class InvoiceService {
         return invoice_data
     }
 
-    async generateInvoiceNumber(key = 'INV'): Promise<string> {
+    async generateInvoiceNumberOld(key = 'INV'): Promise<string> {
         const now = new Date();
         const year = now.getFullYear();
         const month = String(now.getMonth() + 1).padStart(2, '0');
         const day = String(now.getDate()).padStart(2, '0');
         const random = Math.floor(1000 + Math.random() * 9000); // 4-digit random number
         return `${key}-${year}-${month}${day}-${random}`;
+    }
+
+    async generateInvoiceNumber(): Promise<string> {
+
+        const config = invoice_config;
+        const counter = await this.CounterModel.findOne({ key: 'invoice_counter' });
+
+        if (counter) {
+
+            await this.CounterModel.findOneAndUpdate(
+                { key: 'invoice_counter' },
+                { $inc: { lastInvoiceNumber: 1 } },
+                { returnDocument: 'after', upsert: true }
+            );
+
+        } else {
+            await this.CounterModel.create(
+                {
+                    key: 'invoice_counter',
+                    lastInvoiceNumber: config.startNumber + 1
+                },
+            );
+        }
+        let startNumber = counter?.lastInvoiceNumber ?? config.startNumber
+        const nextNumber = startNumber + 1;
+        const paddedNumber = String(nextNumber).padStart(config.minDigits, config.leadingChar);
+
+        const prefixPart = config.prefix ? config.prefix + config.prefixSeparator : "";
+        const suffixPart = config.suffix ? config.suffixSeparator + config.suffix : "";
+
+        return `${prefixPart}${paddedNumber}${suffixPart}`;
+    }
+
+    async generateCollectionMemoInvNumber(): Promise<string> {
+
+        const config = collection_memo_config;
+        const counter = await this.CounterModel.findOne({ key: 'collection_memo_counter' });
+
+        if (counter) {
+
+            await this.CounterModel.findOneAndUpdate(
+                { key: 'collection_memo_counter' },
+                { $inc: { lastcollectionMemoNumber: 1 } },
+                { returnDocument: 'after', upsert: true }
+            );
+
+        } else {
+            await this.CounterModel.create(
+                {
+                    key: 'collection_memo_counter',
+                    lastcollectionMemoNumber: config.startNumber + 1
+                },
+            );
+        }
+
+        let startNumber = counter?.lastcollectionMemoNumber ?? config.startNumber
+        const nextNumber = startNumber + 1;
+        const paddedNumber = String(nextNumber).padStart(config.minDigits, config.leadingChar);
+
+        const prefixPart = config.prefix ? config.prefix + config.prefixSeparator : "";
+        const suffixPart = config.suffix ? config.suffixSeparator + config.suffix : "";
+
+        return `${prefixPart}${paddedNumber}${suffixPart}`;
     }
 
     async getInvoiceDetails(id: string): Promise<any> {
@@ -1449,16 +1550,22 @@ export class InvoiceService {
                 moment(invoiceDto.endDate.toString()).startOf('day').format()
             ) : undefined
 
+        const vat_details = await this.globalModel.findOne({
+            key: 'vatPercentageValue',
+        });
+        const vatPercent = vat_details?.value ?? 5
+        const vatDecimal = vatPercent / 100;
 
         let aggregation: any = [
             {
                 '$match': {
                     'raw_api_log_data.lfi_id': lfi_id,
                     'lfiChargable': true,
+                    "success": true,
                     $and: [
                         startDate && endDate
                             ? {
-                                createdAt: {
+                                'raw_api_log_data.timestamp': {
                                     $gte: startDate,
                                     $lte: endDate
                                 }
@@ -1579,13 +1686,13 @@ export class InvoiceService {
                         'label': '$label'
                     },
                     'quantity': {
-                        '$sum': 1
+                        '$sum': "$volume"
                     },
                     'unit_price': {
-                        '$avg': '$applicableFee'
+                        '$first': "$unit_price"
                     },
                     'total': {
-                        '$sum': '$applicableFee'
+                        '$sum': "$applicableFee"
                     }
                 }
             }, {
@@ -1649,41 +1756,42 @@ export class InvoiceService {
                         ]
                     }
                 }
-            }, {
-                '$addFields': {
-                    'vat': {
-                        '$round': [
-                            {
-                                '$multiply': [
-                                    '$full_total', 0.05
-                                ]
-                            }, 4
-                        ]
-                    },
-                    'actual_total': {
-                        '$round': [
-                            {
-                                '$add': [
-                                    '$full_total', {
-                                        '$multiply': [
-                                            '$full_total', 0.05
-                                        ]
-                                    }
-                                ]
-                            }, 4
-                        ]
-                    }
-                }
-            }
+            },
+            //  {
+            //     '$addFields': {
+            //         'vat': {
+            //             '$round': [
+            //                 {
+            //                     '$multiply': [
+            //                         '$full_total', vatDecimal
+            //                     ]
+            //                 }, 4
+            //             ]
+            //         },
+            //         'actual_total': {
+            //             '$round': [
+            //                 {
+            //                     '$add': [
+            //                         '$full_total', {
+            //                             '$multiply': [
+            //                                 '$full_total', vatDecimal
+            //                             ]
+            //                         }
+            //                     ]
+            //                 }, 4
+            //             ]
+            //         }
+            //     }
+            // }
         ]
         const result = await this.logsModel.aggregate(aggregation);
 
-        const total = result.reduce((sum, item) => sum + item.actual_total, 0);
+        const total = result.reduce((sum, item) => sum + item.full_total, 0);
 
-        const vat = total * 0.05;
+        // const vat = total * vatDecimal;
 
         const roundedTotal = Math.round(total * 100) / 100; // 0.23
-        const roundedVat = Math.round(vat * 100) / 100;
+        // const roundedVat = Math.round(vat * 100) / 100;
 
         // const updated_result = await this.ensureCategories(result);
         const tpp_data = {
@@ -1695,8 +1803,8 @@ export class InvoiceService {
             generated_at: new Date(),        // Generate Date
             currency: 'AED',         //AED default
             tpp_data: result,
-            vat_percent: 5, // Default 5 percent
-            vat_total: roundedVat,  // vat percent of invoice total
+            // vat_percent: vatPercent, // Default 5 percent
+            // vat_total: roundedVat,  // vat percent of invoice total
             total_amount: roundedTotal,  // total of invoice array
             status: 1,
         }
@@ -1711,18 +1819,20 @@ export class InvoiceService {
             ? Number(PaginationDTO.limit)
             : PaginationEnum.LIMIT;
         const options: any = {};
-        // const status =
-        //     PaginationDTO.status != null && PaginationDTO.status != 'all'
-        //         ? PaginationDTO.status
-        //         : null;
-        // Object.assign(options, {
-        //     ...(status === null ? { status: { $ne: null } } : { status: status }),
-        // });
+
         const search = PaginationDTO.search ? PaginationDTO.search.trim() : null;
         if (search) {
             const searchRegex = new RegExp(search, "i");
             options.$or = [{ "lfi_id": search }, { "lfi_name": searchRegex }
             ];
+        }
+        const month = Number(PaginationDTO?.month) ?? 0;
+        const year = Number(PaginationDTO?.year) ?? 0;
+
+        if (month && year && month !== 0) {
+
+            options.invoice_month = month
+            options.invoice_year = year
         }
 
         const count = await this.collectionMemoModel.find(options).countDocuments();
@@ -1770,7 +1880,9 @@ export class InvoiceService {
                     {
                         '$match': {
                             'raw_api_log_data.tpp_id': tpp?.tpp_id,
-                            createdAt: {
+                            "chargeable": true,
+                            "success": true,
+                            'raw_api_log_data.timestamp': {
                                 $gte: fromDate,
                                 $lte: toDate
                             }
@@ -2054,7 +2166,9 @@ export class InvoiceService {
                     {
                         '$match': {
                             'raw_api_log_data.tpp_id': tpp?.tpp_id,
-                            createdAt: {
+                            "lfiChargable": true,
+                            "success": true,
+                            'raw_api_log_data.timestamp': {
                                 $gte: fromDate,
                                 $lte: toDate
                             }
@@ -2911,7 +3025,7 @@ export class InvoiceService {
             const roundedVat = Math.round(vat * 100) / 100;
             const lfiData = await this.lfiDataModel.findOne({ lfi_id: obj?._id });
             const coll_memo_tpp = new this.collectionMemoModel({
-                invoice_number: await this.generateInvoiceNumber(),
+                invoice_number: await this.generateCollectionMemoInvNumber(),
                 lfi_id: obj?._id,
                 lfi_name: lfiData.lfi_name,
                 billing_period_start: startDate,  // Month First
@@ -3025,6 +3139,24 @@ export class InvoiceService {
             //     <td class="right-align">AED ${await this.formatWithCommas(item?.gross_value)}</td>
             //     <td class="right-align">${moment(item?.invoice_date).format('DD-MMM-YY')}</td>
             // </tr>`;
+        }
+        let tableHtml = '';
+
+        if (lfi_list && lfi_list.trim() !== '') {
+            tableHtml = `
+                <table>
+                <thead>
+                    <tr>
+                    <th>#</th>
+                    <th>Item</th>
+                    <th class="table-total">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${lfi_list}
+                </tbody>
+                </table>
+            `;
         }
 
         const serviceInitiationItem = data?.invoice_items.find(item => item.category === 'service_initiation');
@@ -3200,11 +3332,11 @@ export class InvoiceService {
 
         .billing-label {
             width: 183px;
-            color: #6c5c98;
+            color: #1b194f;
             font-weight: 500;
         }
         .billing-sub-label{
-            color: #6c5c98;
+            color: #1b194f;
         }
 
         .statement-summary {
@@ -3547,7 +3679,7 @@ export class InvoiceService {
 
 
         <div class="billing-info">
-            <h3>Billed To:</h3>
+            <h3 class="billing-sub-label">Billed To:</h3>
             <div class="billing-row">
                 <div class="billing-label">TPP NAME :</div>
                 <div class="billing-sub-label">${data.tpp_name}</div>
@@ -3566,12 +3698,12 @@ export class InvoiceService {
                 <div class="billing-sub-label">AED </div>
             </div>
             <div class="billing-row">
-                <div class="billing-label">TPP Technologies TRN: </div>
-                <div class="billing-sub-label" >TPP123456</div>
+                <div class="billing-label">TPP TRN: </div>
+                <div class="billing-sub-label" ></div>
             </div>
             <div class="billing-row">
                 <div class="billing-label">Nebras TRN: </div>
-                <div class="billing-sub-label">NEB123456</div>
+                <div class="billing-sub-label"></div>
             </div>
             <div class="billing-row">
                 <div class="billing-label">Period: </div>
@@ -3609,18 +3741,9 @@ export class InvoiceService {
                 </tbody>
             </table>
 
-            <table>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Item</th>
-                        <th class="table-total">Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${lfi_list}
-                </tbody>
-            </table>
+            
+            ${tableHtml}
+                
 
             <div class="total-row">
                 Total due <b>${total_due.toFixed(4)}</b> by <b>${moment(data.due_date).format('Do MMMM YYYY')}</b>
@@ -3677,7 +3800,7 @@ export class InvoiceService {
                         <div class="billing-sub-label">AED </div>
                     </div>
                     <div class="billing-row">
-                        <div class="billing-label">TPP Technologies TRN: </div>
+                        <div class="billing-label">TPP TRN: </div>
                         <div class="billing-sub-label" >TPP123456</div>
                     </div>
                   
@@ -3690,7 +3813,7 @@ export class InvoiceService {
               
                     <div class="billing-row">
                         <div class="billing-label">Nebras TRN: </div>
-                        <div class="billing-sub-label">NEB123456</div>
+                        <div class="billing-sub-label"></div>
                     </div>
                
         
@@ -3720,10 +3843,6 @@ export class InvoiceService {
                             <tr class="">
                                 <td class="sub-total-row " colspan="6">SUB TOTAL</td>
                                 <td class="table-total">${serviceInitiationItem?.sub_total ?? 0}</td>
-                            </tr>
-                            <tr class="vat-row">
-                                <td class="sub-total-row " colspan="6">VAT</td>
-                                <td class="table-total">${serviceInitiationItem?.vat_amount ?? 0}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -3861,7 +3980,49 @@ export class InvoiceService {
     </div>
                 `
     }
+
     async footer_template() {
+        return `<div style="width: 100%; text-align: center; padding-top: 20px;">
+<svg width="800" height="110" xmlns="http://www.w3.org/2000/svg">
+<!-- Gradient definition -->
+<defs>
+<linearGradient id="bottomGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" stop-color="#1b194f" />
+<stop offset="100%" stop-color="#4ab0a3" />
+</linearGradient>
+</defs>
+ 
+    <!-- Line separator -->
+<!-- <line x1="10" y1="17" x2="700" y2="10" stroke="#eee" stroke-width="1" /> -->
+ 
+    <!-- English text - left side -->
+<text x="50" y="40" fill="#1b194f" style="font-size: 12px; font-family: Arial, sans-serif;">
+      Nebras Open Finance LLC
+</text>
+<text x="50" y="60" fill="#1b194f" style="font-size: 12px; font-family: Arial, sans-serif;">
+      11th Floor, EIF Building, Sultan Bin Zayed The First St
+</text>
+<text x="50" y="80" fill="#1b194f" style="font-size: 12px; font-family: Arial, sans-serif;">
+      Al Nahyan, Abu Dhabi, United Arab Emirates
+</text>
+ 
+    <!-- Arabic text - right side -->
+<text x="770" y="40" fill="#1b194f" text-anchor="end" style="font-size: 12px; font-family: Arial, sans-serif;">
+      نبراس للتمويل المفتوح ذ.م.م
+</text>
+<text x="770" y="60" fill="#1b194f" text-anchor="end" style="font-size: 12px; font-family: Arial, sans-serif;">
+      الطابق 11، بناء صندوق الإمارات للاستثمار، شارع سلطان بن زايد الأول
+</text>
+<text x="770" y="80" fill="#1b194f" text-anchor="end" style="font-size: 12px; font-family: Arial, sans-serif;">
+      آل نهيان، أبوظبي، الإمارات العربية المتحدة
+</text>
+ 
+    <!-- Bottom bar with gradient -->
+<rect x="50" y="100" width="720" height="15" fill="url(#bottomGradient)" />
+</svg>
+</div>`
+    }
+    async footer_template_old() {
         return `
                 <style>
                     .footer {
@@ -3883,6 +4044,7 @@ export class InvoiceService {
                     .footer-right {
                         text-align: right;
                         direction: rtl;
+                        font-family: 'Tahoma','Arial', 'Segoe UI', sans-serif;
                     }
 
                     .bottom-bar {
@@ -4093,7 +4255,7 @@ export class InvoiceService {
             <tbody>
                 ${revenue_data}
                 <tr class="vat">
-                    <td colspan="4">VAT</td>
+                    <td colspan="4">Total VAT</td>
                     <td class="table-total">${total_vat}</td>
                 </tr>
                 <tr class="sub-total">
