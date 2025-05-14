@@ -140,8 +140,8 @@ export class MailService {
 
         // Email options
         const mailOptions = {
-            from: `"${'customName'}" <${process.env.EMAIL_USER}>`, // Custom name and email
-            to: email,
+            from: `${credentials?.sender_name} <${credentials?.username}>`, // Custom name and email
+            to: 'firoskhansha@gmail.com',
             // cc: cc || undefined, // Add CC if provided
             subject: "Monthly Invoice",
             text: "Please find attached your monthly invoice for services provided ",
