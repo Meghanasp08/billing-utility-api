@@ -7,6 +7,7 @@ import { PaginationEnum, } from 'src/common/constants/constants.enum';
 import { PaginationDTO } from 'src/common/dto/common.dto';
 import { collection_memo_config, invoice_config } from 'src/config/app.config';
 import { GlobalConfiguration, GlobalConfigurationDocument } from 'src/configuration/schema/global_config.schema';
+import { MailService } from 'src/mail/mail.service';
 const puppeteer = require('puppeteer')
 @Injectable()
 export class InvoiceService {
@@ -19,7 +20,8 @@ export class InvoiceService {
         @InjectModel('SingleDayTppInvoice') private readonly singleDayTppInvoiceModel: Model<any>,
         @InjectModel('SingleDayCollectionMemo') private readonly singleDayCollectionMemoModel: Model<any>,
         @InjectModel('Counter') private readonly CounterModel: Model<any>,
-        @InjectModel(GlobalConfiguration.name) private globalModel: Model<GlobalConfigurationDocument>
+        @InjectModel(GlobalConfiguration.name) private globalModel: Model<GlobalConfigurationDocument>,
+        private readonly mailService: MailService,
     ) { }
 
     async findAllInvoices(PaginationDTO: PaginationDTO): Promise<any> {
@@ -49,7 +51,7 @@ export class InvoiceService {
         if (month && month !== 0) {
             options.invoice_month = month
         }
-        if(year){
+        if (year) {
             options.invoice_year = year
         }
 
@@ -98,10 +100,10 @@ export class InvoiceService {
         const nonBulkLargeValueCapMerchant = globalConfiData.find(item => item.key === "nonBulkLargeValueCapMerchant")?.value;
         const bulkLargeCorporatefee = globalConfiData.find(item => item.key === "bulkLargeCorporatefee")?.value;
         const dataLargeCorporateMdp = globalConfiData.find(item => item.key === "dataLargeCorporateMdp")?.value;
-        
+
         const vatPercent = vat?.value ?? 5
         const vatDecimal = vatPercent / 100;
-        nonLargeValueMerchantBps = Number(nonLargeValueMerchantBps)/10000
+        nonLargeValueMerchantBps = Number(nonLargeValueMerchantBps) / 10000
         const tppData = await this.tppDataModel.find();
 
         const startDate = new Date(year, month - 1, 1);
@@ -748,10 +750,10 @@ export class InvoiceService {
                                                         branches: [
                                                             { case: { $eq: ["$$expectedLabel", "Merchant Collection"] }, then: nonLargeValueMerchantBps },
                                                             { case: { $eq: ["$$expectedLabel", "Peer-to-Peer"] }, then: paymentLargeValueFeePeer },
-                                                            { case: { $eq: ["$$expectedLabel", "Me-to-Me Transfer"] }, then:paymentFeeMe2me },
-                                                            { case: { $eq: ["$$expectedLabel", "Large value collection"] }, then: nonBulkLargeValueCapMerchant},
+                                                            { case: { $eq: ["$$expectedLabel", "Me-to-Me Transfer"] }, then: paymentFeeMe2me },
+                                                            { case: { $eq: ["$$expectedLabel", "Large value collection"] }, then: nonBulkLargeValueCapMerchant },
                                                             { case: { $eq: ["$$expectedLabel", "Corporate Payments"] }, then: bulkLargeCorporatefee },
-                                                            { case: { $eq: ["$$expectedLabel", "Corporate Treasury Data"] }, then:dataLargeCorporateMdp },
+                                                            { case: { $eq: ["$$expectedLabel", "Corporate Treasury Data"] }, then: dataLargeCorporateMdp },
                                                             { case: { $eq: ["$$expectedLabel", "Customer Data"] }, then: "$lfi_data.mdp_rate" }
                                                         ],
                                                         default: 0.025
@@ -776,7 +778,7 @@ export class InvoiceService {
                             }
                         }
                     },
-                   
+
                     // {
                     //     $addFields: {
                     //         labels: {
@@ -909,7 +911,7 @@ export class InvoiceService {
                 status: 1,
                 notes: 'Invoice Added',
             }
-            
+
             const invoice = new this.invoiceModel(invoice_data)
             await invoice.save();
 
@@ -3316,7 +3318,7 @@ export class InvoiceService {
         return result
     }
 
-    async generateInvoicePDFTpp(data) {
+    async generateInvoicePDFTpp(data: any, mail: boolean = false) {
         if (!fs.existsSync(`./temp`)) {
             fs.mkdirSync(`./temp`)
         }
@@ -3355,9 +3357,28 @@ export class InvoiceService {
             }
         });
         await browser.close();
+        let result;
+        if (mail) {
+            try {
+                const mailResponse = await this.mailService.sendInvoiceEmail(attachmentPath); // Ensure mailservi.sendmail returns a response
+                // Optionally delete the PDF after sending
+                fs.unlink(attachmentPath, (unlinkErr) => {
+                    if (unlinkErr) {
+                        console.error('Error deleting PDF file:', unlinkErr);
+                    } else {
+                        console.log(`Deleted temp PDF: ${attachmentPath}`);
+                    }
+                });
+                result = mailResponse
+            } catch (error) {
+                console.error('Error sending mail:', error);
+                throw new Error('Failed to send mail with the PDF attachment');
+            }
+        } else {
+            result = attachmentPath
+        }
 
-        return attachmentPath
-
+        return result;
     }
 
     async invoiceTemplate(data: any): Promise<any> {
@@ -3499,7 +3520,7 @@ export class InvoiceService {
                     </div>
                     <div class="invoice-total">
                         <span class="invoice-total-label">Total</span>
-                        <span class="invoice-total-amount">AED ${(memo.full_total).toFixed(2) }</span>
+                        <span class="invoice-total-amount">AED ${(memo.full_total).toFixed(2)}</span>
                     </div>
                 </div>
               </div>
@@ -4164,7 +4185,7 @@ export class InvoiceService {
 
     }
 
-    async generateInvoicePDFLfi(data: any) {
+    async generateInvoicePDFLfi(data: any, mail: boolean = false) {
         if (!fs.existsSync(`./temp`)) {
             fs.mkdirSync(`./temp`)
         }
