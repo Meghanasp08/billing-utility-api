@@ -1277,8 +1277,8 @@ export class UploadService {
 
   async getUploadLogData(paginationDTO: PaginationDTO) {
     try {
-      const offset = paginationDTO.Offset
-        ? Number(paginationDTO.Offset)
+      const offset = paginationDTO.offset
+        ? Number(paginationDTO.offset)
         : PaginationEnum.OFFSET;
       const limit = paginationDTO.limit
         ? Number(paginationDTO.limit)
