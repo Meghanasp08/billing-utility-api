@@ -9,7 +9,7 @@ export class PaginationDTO {
     })
     @IsOptional()
     @IsString()
-    Offset: string
+    offset: string
 
     @ApiProperty({
         description: 'Limit',

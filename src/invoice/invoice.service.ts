@@ -26,12 +26,13 @@ export class InvoiceService {
     ) { }
 
     async findAllInvoices(PaginationDTO: PaginationDTO): Promise<any> {
-        const offset = PaginationDTO.Offset
-            ? Number(PaginationDTO.Offset)
+        const offset = PaginationDTO.offset
+            ? Number(PaginationDTO.offset)
             : PaginationEnum.OFFSET;
         const limit = PaginationDTO.limit
             ? Number(PaginationDTO.limit)
             : PaginationEnum.LIMIT;
+        
         const options: any = {};
         const status =
             PaginationDTO.status != null && PaginationDTO.status != 'all'
@@ -2098,8 +2099,8 @@ export class InvoiceService {
     }
 
     async findAllCollectionMemo(PaginationDTO: PaginationDTO): Promise<any> {
-        const offset = PaginationDTO.Offset
-            ? Number(PaginationDTO.Offset)
+        const offset = PaginationDTO.offset
+            ? Number(PaginationDTO.offset)
             : PaginationEnum.OFFSET;
         const limit = PaginationDTO.limit
             ? Number(PaginationDTO.limit)

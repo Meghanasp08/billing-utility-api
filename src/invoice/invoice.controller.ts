@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { JwtAuthGuard } from 'src/auth/guard/jwt-auth-guard';
 import { PaginationDTO } from 'src/common/dto/common.dto';
-import { InvoiceLfiEmailDto, InvoiceTppEmailDto, UpdateInvoiceValueDto, UpdateManyDto } from './dto/invoice.dto';
+import { commonDto, invoiceGenerateDto, InvoiceLfiEmailDto, InvoiceTppEmailDto, pdfGenerateLfiDto, pdfGenerateTppDto, UpdateInvoiceValueDto, UpdateManyDto } from './dto/invoice.dto';
 import { InvoiceService } from './invoice.service';
 
 @Controller('invoice')
@@ -14,6 +14,7 @@ export class InvoiceController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all Invoices and its details' })
   @Get()
   async findAllInvoices(@Query(ValidationPipe) PaginationDTO: PaginationDTO) {
     try {
@@ -29,8 +30,10 @@ export class InvoiceController {
       throw error;
     }
   }
+
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get LFI details' })
   @Get('collection-memo')
   async findAllCollectionMemo(@Query(ValidationPipe) PaginationDTO: PaginationDTO) {
     try {
@@ -46,8 +49,10 @@ export class InvoiceController {
       throw error;
     }
   }
+
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get single LFI details' })
   @Get('collection-memo/:id')
   async findCollectionMemoById(@Param('id') id: string) {
     try {
@@ -95,8 +100,9 @@ export class InvoiceController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @ApiOperation({ summary: 'Generate invoices from logs' })
   @Post()
-  async invoiceCreation(@Body(ValidationPipe) invoiceDto: any,): Promise<any> {
+  async invoiceCreation(@Body(ValidationPipe) invoiceDto: invoiceGenerateDto,): Promise<any> {
     try {
       const result = await this.invoiceService.invoiceCreation(invoiceDto);
       return {
@@ -109,9 +115,11 @@ export class InvoiceController {
       throw error;
     }
   }
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @Post('single-day-creation')
+
+  // @UseGuards(JwtAuthGuard)
+  // @ApiBearerAuth()
+  // @ApiOperation({ summary: 'Its not functional' })
+  // @Post('single-day-creation')
   async invoiceCreationSingleDay(@Body(ValidationPipe) invoiceDto: any,): Promise<any> {
     try {
       const result = await this.invoiceService.invoiceCreationSingleDay();
@@ -125,9 +133,11 @@ export class InvoiceController {
       throw error;
     }
   }
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @Post('monthly-creation')
+
+  // @UseGuards(JwtAuthGuard)
+  // @ApiBearerAuth()
+  // @ApiOperation({ summary: 'Its not functional' })
+  // @Post('monthly-creation')
   async invoiceCreationMonthlyTpp(@Body(ValidationPipe) invoiceDto: any,): Promise<any> {
     try {
       const result = await this.invoiceService.invoiceCreationMonthlyTpp();
@@ -141,8 +151,10 @@ export class InvoiceController {
       throw error;
     }
   }
+
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get single Invoice data' })
   @Get(':id')
   async getInvoiceDetails(@Param('id') id: string): Promise<any> {
     try {
@@ -157,10 +169,12 @@ export class InvoiceController {
       throw error;
     }
   }
+
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @ApiOperation({ summary: 'Billing API for a TPP' })
   @Get('billing-tpp/:tpp_id')
-  async getbillingTpps(@Param('tpp_id') tpp_id: string, @Query(ValidationPipe) invoiceDto: any): Promise<any> {
+  async getbillingTpps(@Param('tpp_id') tpp_id: string, @Query(ValidationPipe) invoiceDto: commonDto): Promise<any> {
     try {
       const result = await this.invoiceService.billingTpp(tpp_id, invoiceDto);
       return {
@@ -173,10 +187,12 @@ export class InvoiceController {
       throw error;
     }
   }
+
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @ApiOperation({ summary: 'Billing API for a LFI' })
   @Get('billing-lfi/:lf_id')
-  async getbillingLfis(@Param('lf_id') lf_id: string, @Query(ValidationPipe) invoiceDto: any): Promise<any> {
+  async getbillingLfis(@Param('lf_id') lf_id: string, @Query(ValidationPipe) invoiceDto: commonDto): Promise<any> {
     try {
       const result = await this.invoiceService.billingLfiStatement(lf_id, invoiceDto);
       return {
@@ -189,10 +205,12 @@ export class InvoiceController {
       throw error;
     }
   }
+
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @ApiOperation({ summary: 'PDF generate for a TPP' })
   @Post('pdf-generate-tpp')
-  async generateInvoicePDFTpp(@Body(ValidationPipe) invoiceDto: any, @Res() res: Response
+  async generateInvoicePDFTpp(@Body(ValidationPipe) invoiceDto: pdfGenerateTppDto, @Res() res: Response
   ): Promise<any> {
     try {
       const filePath = await this.invoiceService.generateInvoicePDFTpp(invoiceDto);
@@ -220,10 +238,12 @@ export class InvoiceController {
       });
     }
   }
+
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @ApiOperation({ summary: 'PDF generate for a LFI' })
   @Post('pdf-generate-lfi')
-  async generateInvoicePDFLfi(@Body(ValidationPipe) invoiceDto: any, @Res() res: Response
+  async generateInvoicePDFLfi(@Body(ValidationPipe) invoiceDto: pdfGenerateLfiDto, @Res() res: Response
   ): Promise<any> {
     try {
       const filePath = await this.invoiceService.generateInvoicePDFLfi(invoiceDto);
@@ -251,6 +271,7 @@ export class InvoiceController {
       });
     }
   }
+
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Post('send-tpp-invoice')
