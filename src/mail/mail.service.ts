@@ -123,29 +123,33 @@ export class MailService {
             to: 'firoskhansha@gmail.com',
             // cc: cc || undefined, // Add CC if provided
             subject: `Invoice and Statement of Account for ${clientName}`,
-            text: `Dear ${clientName},
-            Reference: ${invNumber}
-
-            Please find attached herewith the following accounting documents. Kindly ensure the payable amounts are duly made to the accounting details shown on the invoice.
-
-            The attachment contains:
-            
-            ${tpp?`
-            - TPP Monthly Billing Summary
-            - Tax Invoice
-            - Collection Memo for each LFI involved in the statement of account`:
-            `- LFI Statement Of Revenue`}
-
-            Thank you for your cooperation.
-
-            Thanks and Regards,
-            For Nebras
-            Web Admin
-
-            ------------------------------------------------------------------------------------
-            This is a computer-generated statement.
-
-            IMPORTANT: The contents of this email and any attachments are confidential. They are intended for the named recipient(s) only. If you have received this email by mistake, please notify the sender immediately and do not disclose the contents to anyone or make copies thereof.`,
+            html: `
+            <p>Dear ${clientName},</p>
+            <p><strong>Reference:</strong> ${invNumber}</p>
+            <p>Please find attached herewith the following accounting documents. Kindly ensure the payable amounts are duly made to the accounting details shown on the invoice.</p>
+            <p>The attachment contains:</p>
+            <ul>
+                ${tpp
+                    ? `
+                    <li>TPP Monthly Billing Summary</li>
+                    <li>Tax Invoice</li>
+                    <li>Collection Memo for each LFI involved in the statement of account</li>
+                    `
+                    : `
+                    <li>LFI Statement Of Revenue</li>
+                    `
+                }
+            </ul>
+            <p>Thank you for your cooperation.</p>
+            <br />
+            <p>Thanks and Regards,</p>
+            <p>For Nebras<br />Web Admin</p>
+            <hr />
+            <p style="font-size: 0.9em; color: #666;">This is a computer-generated statement.</p>
+            <p style="font-size: 0.9em; color: #666;">
+                <strong>IMPORTANT:</strong> The contents of this email and any attachments are confidential. They are intended for the named recipient(s) only. If you have received this email by mistake, please notify the sender immediately and do not disclose the contents to anyone or make copies thereof.
+            </p>
+        `,
             attachments: [
                 {
                     filename: 'invoice.pdf',
