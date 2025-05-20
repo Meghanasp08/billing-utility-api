@@ -35,7 +35,7 @@ export class InvoiceService {
 
         const options: any = {};
         const status =
-            PaginationDTO.invoice_status != null && Number(PaginationDTO.invoice_status) !=0
+            PaginationDTO.invoice_status != null && Number(PaginationDTO.invoice_status) != 0
                 ? Number(PaginationDTO.invoice_status)
                 : null;
         Object.assign(options, {
@@ -893,7 +893,7 @@ export class InvoiceService {
                 invoice_number: await this.generateInvoiceNumber(),
                 tpp_id: tpp?.tpp_id,
                 tpp_name: tpp?.tpp_name,
-                tpp_email:tpp?.email,
+                tpp_email: tpp?.email,
                 billing_address_line1: 'billing_address_line1',
                 billing_address_line2: 'billing_address_line2',
                 billing_address_city: 'billing_address_city',
@@ -1144,6 +1144,10 @@ export class InvoiceService {
             ];
         }
 
+        data.invoice_status != null && Number(data.invoice_status) != 0
+            ? options.status = Number(data.invoice_status)
+            : null;
+
         // Final query
         const filter = {
             invoice_month: data?.month,
@@ -1152,7 +1156,6 @@ export class InvoiceService {
         };
 
         // Update operation
-
         return await this.invoiceModel.updateMany(
             filter,
             {
