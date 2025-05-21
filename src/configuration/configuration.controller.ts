@@ -1,9 +1,9 @@
-import { Body, Controller, Get, HttpStatus, Param, Patch, Put, Query, Req, UseGuards, ValidationPipe } from '@nestjs/common';
+import { Body, Controller, Get, HttpStatus, Param, Patch, Post, Put, Query, Req, UseGuards, ValidationPipe } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guard/jwt-auth-guard';
 import { PaginationDTO } from 'src/common/dto/common.dto';
 import { ConfigurationService } from './configuration.service';
-import { GetglobalValueDto, UpdateApiDto, UpdateglobalValueDto, UpdateManyDto } from './dto/global_value.dto';
+import { CreateApiDto, GetglobalValueDto, UpdateApiDto, UpdateglobalValueDto, UpdateManyDto } from './dto/global_value.dto';
 import { UpdateLfiDataDto } from './dto/lfi_update.dto';
 
 
@@ -115,6 +115,19 @@ export class ConfigurationController {
         const apiData = await this.configService.updateApidatas(updateApiDto);
         return {
             message: 'Api Data Updated successfully',
+            result: apiData,
+            statusCode: HttpStatus.OK
+        }
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Create New Api Data' })
+    @Post('api-data')
+    async createApidata(@Body(ValidationPipe) createApiDto: CreateApiDto) {
+        const apiData = await this.configService.createApidatas(createApiDto);
+        return {
+            message: 'Api Data Created successfully',
             result: apiData,
             statusCode: HttpStatus.OK
         }

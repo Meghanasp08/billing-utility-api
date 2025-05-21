@@ -128,3 +128,74 @@ export class UpdateApiDto {
     @IsEnum(ApiCategory, { message: 'apiCategory must be a valid enum value.' })
     apiCategory: ApiCategory;
 }
+
+export class CreateApiDto {
+    @ApiProperty({
+        description: 'The full URL constructed from api_spec and api_endpoint.',
+        example: '/open-finance/payment/v1.0/payment-consents/{ConsentId}',
+        required: true,
+    })
+    @IsString()
+    @IsNotEmpty()
+    url: string;
+
+    @ApiProperty({
+        description: 'The operation type for the API (e.g., GET, POST).',
+        example: 'get',
+        required: true,
+    })
+    @IsString()
+    @IsNotEmpty()
+    api_operation: string;
+
+    @ApiProperty({
+        description: 'Indicates if the API Hub fee is chargeable.',
+        example: true,
+        required: true,
+    })
+    @IsBoolean()
+    chargeable_api_hub_fee: boolean;
+
+    @ApiProperty({
+        description: 'Indicates if the LFI/TPP fee is chargeable.',
+        example: false,
+        required: true,
+    })
+    @IsBoolean()
+    chargeable_LFI_TPP_fee: boolean;
+
+    // @ApiProperty({
+    //     description: 'The key name associated with this API.',
+    //     example: 'setup',
+    //     required: true,
+    // })
+    // @IsString()
+    // @IsNotEmpty()
+    // key_name: string;
+
+    @ApiProperty({
+        description: 'The key name for the API.',
+        enum: KeyName,
+        example: KeyName.SETUP,
+
+    })
+    @IsEnum(KeyName, { message: 'key must be one of the predefined key names.' })
+    key: KeyName;
+
+    // @ApiProperty({
+    //     description: 'The category under which the API is classified.',
+    //     example: 'Setup and Consent',
+    //     required: true,
+    // })
+    // @IsString()
+    // @IsNotEmpty()
+    // api_category: string;
+
+    @ApiProperty({
+        description: 'The API category for the operation.',
+        enum: ApiCategory,
+        example: ApiCategory.SETUP_AND_CONSENT,
+    })
+    @IsEnum(ApiCategory, { message: 'apiCategory must be a valid enum value.' })
+    apiCategory: ApiCategory;
+}
