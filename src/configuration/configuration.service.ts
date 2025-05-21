@@ -4,7 +4,7 @@ import { Model, Types } from 'mongoose';
 import { PaginationEnum } from 'src/common/constants/constants.enum';
 import { PaginationDTO } from 'src/common/dto/common.dto';
 import { LfiData, LfiDataDocument } from 'src/upload/schemas/lfi-data.schema';
-import { GetglobalValueDto, UpdateApiDto, UpdateglobalValueDto } from './dto/global_value.dto';
+import { CreateApiDto, GetglobalValueDto, UpdateApiDto, UpdateglobalValueDto } from './dto/global_value.dto';
 import { UpdateLfiDataDto } from './dto/lfi_update.dto';
 import { ApiDataConfiguration, ApiDataConfigurationDocument } from './schema/api_data.schema';
 import { GlobalConfiguration, GlobalConfigurationDocument } from './schema/global_config.schema';
@@ -136,6 +136,19 @@ export class ConfigurationService {
             return updatedApi;
         } catch (error) {
             throw new Error(`Error retrieving api data: ${error.message}`);
+        }
+    }
+
+    async createApidatas(createApiDto: CreateApiDto) {
+        try {
+            const existingApi = await this.apiDataModel.findOne({ key: createApiDto.key });
+            if (existingApi) {
+                throw new NotFoundException(`API data with key ${createApiDto.key} already exists.`);
+            }
+            const newApi = await this.apiDataModel.create(createApiDto);
+            return newApi;
+        } catch (error) {
+            throw new Error(`Error creating api data: ${error.message}`);
         }
     }
 }
