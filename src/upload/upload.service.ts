@@ -688,10 +688,10 @@ export class UploadService {
       rawData.forEach(data => {
         const tpp_id = data["raw_api_log_data.tpp_id"];
         const tpp_name = data["raw_api_log_data.tpp_name"];
-        const tpp_client_id = data["raw_api_log_data.tpp_client_id"];
+        // const tpp_client_id = data["raw_api_log_data.tpp_client_id"];
 
         if (tpp_id && !tppMap.has(tpp_id)) {
-          tppMap.set(tpp_id, { tpp_id, tpp_name, tpp_client_id });
+          tppMap.set(tpp_id, { tpp_id, tpp_name });
         }
       });
 
