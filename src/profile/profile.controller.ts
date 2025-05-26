@@ -1,8 +1,9 @@
-import { Controller, Get, HttpStatus, Param, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpStatus, Param, Post, Query, Req, Res, UseGuards, ValidationPipe } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { JwtAuthGuard } from 'src/auth/guard/jwt-auth-guard';
 import { ProfileService } from './profile.service';
+import { ChangePasswordDto } from './dto/profile.dto';
 
 @ApiTags('profile')
 @Controller('profile')
@@ -13,12 +14,13 @@ export class ProfileController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Retrieve the profile of the logged-in user.' })
   @Get()
-  async getProfile(@Req() req: any) {
+  async getProfile(@Req() request: any) {
     try {
-      const users = await this.profileService.getProfile();
+      const users_id = request.user.userId
+      const result = await this.profileService.getProfile(users_id);
       return {
-        message: 'List of users',
-        result: users,
+        message: 'Profile of the logged-in user',
+        result: result,
         statusCode: HttpStatus.OK
       }
     } catch (error) {
@@ -223,4 +225,22 @@ export class ProfileController {
     }
   }
 
+  
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('change-password')
+  async changePassword(@Body(ValidationPipe) changePasswordDto: ChangePasswordDto, @Req() req: any): Promise<any> {
+    try {
+      const users_id = req.user.userId
+      const result = await this.profileService.changePassword(changePasswordDto, users_id);
+      return {
+        message: 'Password changed successfully',
+        result: result,
+        statusCode: HttpStatus.OK
+      }
+    } catch (err) {
+      console.log(err);
+      throw err;
+    }
+  }
 }

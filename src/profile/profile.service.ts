@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import * as fs from 'fs';
 const moment = require('moment-timezone');
@@ -8,7 +8,9 @@ import { Log, LogDocument } from 'src/upload/schemas/billing-log.schema';
 import { LfiData, LfiDataDocument } from 'src/upload/schemas/lfi-data.schema';
 import { TppData, TppDataDocument } from 'src/upload/schemas/tpp-data.schema';
 import { User, UserDocument } from './schemas/user.schema';
+import { ChangePasswordDto } from './dto/profile.dto';
 const { Parser } = require('json2csv');
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class ProfileService {
@@ -17,8 +19,25 @@ export class ProfileService {
     @InjectModel(LfiData.name) private lfiModel: Model<LfiDataDocument>,
     @InjectModel(TppData.name) private tppModel: Model<TppDataDocument>,) { }
 
-  getProfile() {
-    return this.userModel.find().exec();;
+  async getProfile(users_id) {
+    return await this.userModel.findById(users_id).exec();
+  }
+
+  async changePassword(changePasswordDto: ChangePasswordDto, users_id: any): Promise<any> {
+    const user = await this.userModel.findById(users_id).exec();
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+    if (changePasswordDto.new_password !== changePasswordDto.new_password) {
+      throw new BadRequestException('Invalid new password');
+    }
+    if (await bcrypt.compare(changePasswordDto.current_password, user.password)) {
+      user.password = changePasswordDto.new_password;
+      await user.save();
+      return true;
+    } else {
+      throw new BadRequestException('Invalid current password');
+    }
   }
 
   async getLogData(startDate?: string, endDate?: string, search?: string, limit: number = 100,

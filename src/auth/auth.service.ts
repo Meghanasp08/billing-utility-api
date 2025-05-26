@@ -6,7 +6,7 @@ import * as bcrypt from 'bcrypt';
 import { Model } from 'mongoose';
 import { User, UserDocument } from '../profile/schemas/user.schema';
 import { LoginDto } from './dto/login.dto';
-import { CreateUserDto } from './dto/user.dto';
+import { CreateUserDto, ForgotPasswordSendOtpDTO, ForgotPasswordVerifyOtpDTO, VerifyTokenAndChangePasswordDTO } from './dto/user.dto';
 
 @Injectable()
 export class AuthService {
@@ -176,6 +176,84 @@ export class AuthService {
     await user.save();
 
     return { message: 'Password updated successfully' };
+
+  }
+
+  async sendOtpForForgetPassword(forgotPassword: ForgotPasswordSendOtpDTO) {
+
+    const user = await this.userModel.findOne({
+      email: forgotPassword.email,
+    });
+
+    if (!user) {
+      throw new HttpException(
+        'User with this username does not exist',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    return {
+      otp: true,
+      email: user.email,
+    };
+  }
+
+  async verifyOtpForForgetPassword(forgotPassword: ForgotPasswordVerifyOtpDTO) {
+
+    const user = await this.userModel.findOne({
+      email: forgotPassword.email,
+    });
+    const jwt_token_key = this.config.get('ACCESS_TOKEN_SECRET') || 'ACCESS_TOKEN_SECRET';
+
+    if (!user) {
+      throw new HttpException(
+        'User with this username does not exist',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    if (forgotPassword.otp == '123456') {
+      const token = await this.jwtService.sign(user.toJSON(), {
+        secret: jwt_token_key,
+        expiresIn: '5m',
+      });
+
+      return { token };
+    } else {
+      throw new HttpException('Invalid OTP', HttpStatus.UNAUTHORIZED);
+    }
+  }
+
+  async changePasswordForVerifiedCustomerOtp(
+    changePasswordByOtp: VerifyTokenAndChangePasswordDTO,
+  ) {
+
+    const updatePassword = {
+      password: changePasswordByOtp.password
+    };
+
+    const jwt_token_key = process.env.JWT_SECRET_KEY_ADMIN;
+    let payload: any
+    try {
+      payload = await this.jwtService.verifyAsync(changePasswordByOtp.token, {
+        secret: this.config.get('ACCESS_TOKEN_SECRET') || 'ACCESS_TOKEN_SECRET',
+      });
+
+    } catch (err) {
+      throw new NotFoundException(`JWT verification failed: ${err.message}`);
+    }
+   const user = await this.userModel.findById(payload._id);
+
+    if (!(user && user._id)) {
+      throw new HttpException(
+        'User with this username does not exist',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    // Update user password
+    user.password = changePasswordByOtp.password;
+    return await user.save();
 
   }
 
