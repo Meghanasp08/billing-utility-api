@@ -3,7 +3,7 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { getAccessTokenUsingRefreshTokenDto } from './dto/token.dto';
-import { CreateUserDto } from './dto/user.dto';
+import { CreateUserDto, ForgotPasswordSendOtpDTO, ForgotPasswordVerifyOtpDTO, VerifyTokenAndChangePasswordDTO } from './dto/user.dto';
 import { JwtAuthGuard } from './guard/jwt-auth-guard';
 
 @ApiTags('Auth')
@@ -80,6 +80,63 @@ export class AuthController {
       const result = await this.authService.createPassword(data);
       return {
         message: 'Password updated successfully',
+        result: result,
+        statusCode: HttpStatus.OK,
+      };
+    } catch (error) {
+      console.log(error);
+      throw error;
+    }
+  }
+
+   @Post('forgot-password/otp')
+  async sendOtpForForgetPassword(
+    @Body(ValidationPipe) forgotPassword: ForgotPasswordSendOtpDTO,
+  ) {
+    try {
+      const result =
+        await this.authService.sendOtpForForgetPassword(forgotPassword);
+      return {
+        message: 'Otp Sent Successfully',
+        result: result,
+        statusCode: HttpStatus.OK,
+      };
+    } catch (error) {
+      console.log(error);
+      throw error;
+    }
+  }
+
+  @Post('forgot-password/verify_otp')
+  async verifyOtpForForgetPassword(
+    @Body(ValidationPipe) forgotPassword: ForgotPasswordVerifyOtpDTO,
+  ) {
+    try {
+      const result =
+        await this.authService.verifyOtpForForgetPassword(forgotPassword);
+      return {
+        message: 'OTP verified successfully',
+        result: result,
+        statusCode: HttpStatus.OK,
+      };
+    } catch (error) {
+      console.log(error);
+      throw error;
+    }
+  }
+
+  @Post('forgot-password/change_password')
+  async changePasswordForVerifiedOtp(
+    @Body(ValidationPipe)
+    changePasswordByOtp: VerifyTokenAndChangePasswordDTO,
+  ) {
+    try {
+      const result =
+        await this.authService.changePasswordForVerifiedCustomerOtp(
+          changePasswordByOtp,
+        );
+      return {
+        message: 'Password changed successfully',
         result: result,
         statusCode: HttpStatus.OK,
       };

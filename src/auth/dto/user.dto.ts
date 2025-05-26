@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsOptional, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateUserDto {
   @ApiProperty({ description: "User's first name" })
@@ -26,4 +26,55 @@ export class CreateUserDto {
   @ApiProperty({ description: "User's refresh token", required: false })
   @IsOptional() 
   refreshToken?: string;
+}
+
+export class ForgotPasswordSendOtpDTO {
+  @ApiProperty({
+    description: 'email',
+    type: String,
+    example: 'email'
+  })
+  @IsString()
+  @IsNotEmpty()
+  readonly email: string
+
+}
+
+export class ForgotPasswordVerifyOtpDTO {
+  @ApiProperty({
+    description: 'email',
+    type: String,
+    example: 'email'
+  })
+  @IsString()
+  @IsNotEmpty()
+  readonly email: string
+
+  @ApiProperty({
+    description: 'otp',
+    type: String
+  })
+  @IsString()
+  @IsNotEmpty()
+  readonly otp: string
+
+  reference_id: string
+}
+
+export class VerifyTokenAndChangePasswordDTO {
+  @ApiProperty({
+    description: 'password',
+    type: String
+  })
+  @IsString()
+  @IsNotEmpty()
+  readonly password: string
+
+  @ApiProperty({
+    description: 'token',
+    type: String
+  })
+  @IsString()
+  @IsNotEmpty()
+  readonly token: string
 }
