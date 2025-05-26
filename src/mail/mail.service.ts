@@ -103,7 +103,7 @@ export class MailService {
         }
     }
 
-    async sendInvoiceEmail(attachmentPath: any, email: string, clientName: string, invNumber: string, tpp: boolean) {
+    async sendInvoiceEmail(attachmentPath: any, email: any, clientName: string, invNumber: string, tpp: boolean) {
         if (!fs.existsSync(attachmentPath)) {
             throw new Error('Attachment file not found');
         }
@@ -280,12 +280,11 @@ export class MailService {
             throw new NotFoundException('User not found');
         }
 
-        if (user.status == 1) {
+        if (user.isVerified == true) {
             throw new NotFoundException('Account already activated');
         }
 
         user.status = 1;
-        user.isVerified = true;
         await user.save();
 
         return { message: 'Account activated successfully' };
