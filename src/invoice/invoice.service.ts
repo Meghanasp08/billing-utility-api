@@ -3534,7 +3534,7 @@ export class InvoiceService {
         if (!tppData)
             throw new Error('Invalid Tpp-ID');
 
-        let email = tppData?.email ?? 'rahulmanikandan0298@gmail.com'
+        let email = tppData?.email_address ?? 'rahulmanikandan0298@gmail.com'
 
         const currentDate = new Date();
         const timestamp = currentDate.getTime();
@@ -3573,6 +3573,9 @@ export class InvoiceService {
         let result;
         if (mail) {
             try {
+                if (!Array.isArray(email) || email.length === 0) {
+                    throw new Error('No valid recipient email addresses provided.');
+                }
                 let tpp = true;
                 const mailResponse = await this.mailService.sendInvoiceEmail(attachmentPath, email, invoice_data?.tpp_name, invoice_data?.invoice_number, tpp); // Ensure mailservi.sendmail returns a response
                 // Optionally delete the PDF after sending
@@ -4408,7 +4411,7 @@ export class InvoiceService {
         if (!lfiData)
             throw new Error('Invalid Lfi-ID');
 
-        let email = lfiData?.email ?? 'rahulmanikandan0298@gmail.com'
+        let email = lfiData?.email_address 
 
         const currentDate = new Date();
         const timestamp = currentDate.getTime();
@@ -4450,6 +4453,9 @@ export class InvoiceService {
         if (mail) {
             try {
                 let tpp = false;
+                if (!Array.isArray(email) || email.length === 0) {
+                    throw new Error('No valid recipient email addresses provided.');
+                }
                 const mailResponse = await this.mailService.sendInvoiceEmail(attachmentPath, email, invoice_data?.lfi_name, invoice_data?.invoice_number, tpp); // Ensure mailservi.sendmail returns a response
                 // Optionally delete the PDF after sending
                 fs.unlink(attachmentPath, (unlinkErr) => {

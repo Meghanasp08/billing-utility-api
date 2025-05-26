@@ -166,9 +166,13 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
+    if (user.isVerified == true) {
+      throw new NotFoundException('Account already activated');
+    }
 
     user.activationToken = '';
     user.password = data.password;
+    user.isVerified = true;
     await user.save();
 
     return { message: 'Password updated successfully' };
