@@ -528,7 +528,7 @@ export class UploadService {
       }
       return {
         ...record,
-        applicableApiHubFee: totalApiHubFee,
+        applicableApiHubFee: totalApiHubFee.toFixed(3),
         apiHubVolume: apiHubVolume
       };
     });

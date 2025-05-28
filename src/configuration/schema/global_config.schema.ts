@@ -5,6 +5,10 @@ export type GlobalConfigurationDocument = GlobalConfiguration & Document;
 
 @Schema({ timestamps: true, collection: 'global_configuration' })
 export class GlobalConfiguration {
+
+    @Prop({ required: true })
+    label: string;
+
     @Prop({ required: true })
     description: string;
 
