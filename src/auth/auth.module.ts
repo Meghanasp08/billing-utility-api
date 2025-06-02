@@ -9,6 +9,7 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guard/jwt-auth-guard';
 import { JwtStrategy } from './jwt.strategy/jwt.strategy';
 import { RoleSchema } from 'src/role/schemas.ts/roles.schema';
+import { MailModule } from 'src/mail/mail.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { RoleSchema } from 'src/role/schemas.ts/roles.schema';
       { name: 'Role', schema: RoleSchema },
     ]),
     PassportModule,
+    MailModule,
     JwtModule.registerAsync({
       useFactory: () => ({
         secret: process.env.JWT_SECRET || 'defaultSecret',
