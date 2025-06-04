@@ -216,21 +216,21 @@ export class MailService {
     const user_data = await user.save();
 
     if (forget_key === true) {
-      let activationLink = `http://193.123.81.148:8888/email-verify/${token}`;
+      let passwordLink = `http://193.123.81.148:8888/reset-password/${token}`;
       const mail_data = {
         to: user.email,
         subject: 'Forgot Password',
-        html: await this.forgetPasswordLink_html(user_data, activationLink),
+        html: await this.forgetPasswordLink_html(user_data, passwordLink),
         to_mail: user.email
       };
       await this.sendEmail(mail_data);
 
     } else {
-      let passwordLink = `http://193.123.81.148:8888/reset-password/${token}`;
+      let activationLink = `http://193.123.81.148:8888/email-verify/${token}`;
       const mail_data = {
         to: user.email,
         subject: 'Activate your account',
-        html: await this.activation_html(user_data, passwordLink),
+        html: await this.activation_html(user_data, activationLink),
         to_mail: user.email
       };
       await this.sendEmail(mail_data);
