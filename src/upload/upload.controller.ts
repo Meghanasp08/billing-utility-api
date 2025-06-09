@@ -19,10 +19,9 @@ import { Response } from 'express';
 import { JwtAuthGuard } from 'src/auth/guard/jwt-auth-guard';
 import { PaginationDTO } from 'src/common/dto/common.dto';
 
-import { unlink } from 'fs';
-import { UploadService } from './upload.service';
-import { Claims } from 'src/common/claims/claims.decorator';
 import { Claim } from 'src/common/claims/claim.enum';
+import { Claims } from 'src/common/claims/claims.decorator';
+import { UploadService } from './upload.service';
 
 
 
@@ -58,7 +57,7 @@ export class UploadController {
             },
             required: ['raw_data', 'payment_data'],
         },
-    })  
+    })
     @Claims(Claim.LOG_UPLOAD)
     async uploadFiles(@UploadedFiles() files: { raw_data?: Express.Multer.File[]; payment_data?: Express.Multer.File[]; }, @Req() req: any) {
         try {
@@ -256,15 +255,15 @@ export class UploadController {
 
             const organizationFilePath = files.organization_data[0].path;
 
-            const tppLfi = await this.uploadService.updateTppAndLfi(organizationFilePath,);
+            const tppLfi = await this.uploadService.updateTppAndLfi(req.user.email, organizationFilePath,);
 
-            unlink(organizationFilePath, (unlinkErr) => {
-                if (unlinkErr) {
-                    console.error('Error deleting organization data file:', unlinkErr);
-                } else {
-                    console.log(`Deleted temp organization data file: ${organizationFilePath}`);
-                }
-            });
+            // unlink(organizationFilePath, (unlinkErr) => {
+            //     if (unlinkErr) {
+            //         console.error('Error deleting organization data file:', unlinkErr);
+            //     } else {
+            //         console.log(`Deleted temp organization data file: ${organizationFilePath}`);
+            //     }
+            // });
             return {
                 message: 'Organization data processed successfully.',
                 result: tppLfi,
@@ -272,7 +271,7 @@ export class UploadController {
             }
         } catch (error) {
             if (error instanceof HttpException) {
-                throw error; // Re-throw expected errors with proper status codes
+                throw error;
             }
 
             const statusCode = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
