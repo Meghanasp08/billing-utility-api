@@ -7,6 +7,7 @@ import { Model } from 'mongoose';
 import { User, UserDocument } from '../profile/schemas/user.schema';
 import { LoginDto } from './dto/login.dto';
 import { CreateUserDto, ForgotPasswordSendOtpDTO, ForgotPasswordVerifyOtpDTO, VerifyTokenAndChangePasswordDTO } from './dto/user.dto';
+import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
 export class AuthService {
@@ -15,6 +16,8 @@ export class AuthService {
     private readonly config: ConfigService,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectModel('Role') private readonly rolesModel: Model<any>,
+    private readonly mailService: MailService,
+
   ) { }
 
   async signup(createUserDto: CreateUserDto): Promise<User> {
@@ -189,8 +192,10 @@ export class AuthService {
       );
     }
 
+    await this.mailService.sendActivationEmail(user,true);
+
     return {
-      otp: true,
+      msg: 'The link has been successfully sent to your email address',
       email: user.email,
     };
   }
