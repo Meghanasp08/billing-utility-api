@@ -19,10 +19,9 @@ import { Response } from 'express';
 import { JwtAuthGuard } from 'src/auth/guard/jwt-auth-guard';
 import { PaginationDTO } from 'src/common/dto/common.dto';
 
-import { unlink } from 'fs';
-import { UploadService } from './upload.service';
-import { Claims } from 'src/common/claims/claims.decorator';
 import { Claim } from 'src/common/claims/claim.enum';
+import { Claims } from 'src/common/claims/claims.decorator';
+import { UploadService } from './upload.service';
 
 
 
@@ -32,7 +31,7 @@ export class UploadController {
 
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
-    @Post()
+    @Post('input')
     @UseInterceptors(FileFieldsInterceptor([
         { name: 'raw_data', maxCount: 1 },
         { name: 'payment_data', maxCount: 1 },]))
@@ -58,7 +57,7 @@ export class UploadController {
             },
             required: ['raw_data', 'payment_data'],
         },
-    })  
+    })
     @Claims(Claim.LOG_UPLOAD)
     async uploadFiles(@UploadedFiles() files: { raw_data?: Express.Multer.File[]; payment_data?: Express.Multer.File[]; }, @Req() req: any) {
         try {
@@ -193,14 +192,14 @@ export class UploadController {
         }
     }
     @ApiBearerAuth()
-    @Get('log')
+    @Get('input/log')
     @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: 'Get upload log data' })
     @Claims(Claim.DATA_UPLOADER_VIEW)
     async getUploadLog(@Query(ValidationPipe) PaginationDTO: PaginationDTO) {
         try {
-
-            const uploadLog = await this.uploadService.getUploadLogData(PaginationDTO);
+            let key = 'inputFiles';
+            const uploadLog = await this.uploadService.getUploadLogData(key, PaginationDTO);
             return {
                 message: 'Upload Log details',
                 result: uploadLog,
@@ -224,9 +223,60 @@ export class UploadController {
             );
         }
     }
+
+    @ApiBearerAuth()
+    @Get('master/download/:id')
+    @UseGuards(JwtAuthGuard)
+    @ApiOperation({ summary: 'Download Master Data file.' })
+    @Claims(Claim.DATA_UPLOADER_DOWNLOAD)
+    async downloadMaterData(@Res() res: Response, @Param('id') id: string,) {
+        try {
+            const masterData = await this.uploadService.getMasterLogCsv(id);
+            return res.download(masterData, 'Master_Data.csv', (err) => {
+                if (err) {
+                    console.error('Error while downloading file:', err);
+                    res.status(HttpStatus.INTERNAL_SERVER_ERROR).send('Failed to download file.');
+                }
+            });
+        } catch (error) {
+            throw error;
+        }
+    }
+    @ApiBearerAuth()
+    @Get('lfi-tpp/master/log')
+    @UseGuards(JwtAuthGuard)
+    @ApiOperation({ summary: 'Get Master log data' })
+    @Claims(Claim.DATA_UPLOADER_VIEW)
+    async getMasterUploadLog(@Query(ValidationPipe) PaginationDTO: PaginationDTO) {
+        try {
+            let key = 'lfiTppMaster';
+            const uploadLog = await this.uploadService.getUploadLogData(key, PaginationDTO);
+            return {
+                message: 'Master Log details',
+                result: uploadLog,
+                statusCode: HttpStatus.OK
+            }
+        } catch (error) {
+            if (error instanceof HttpException) {
+                throw error; // Re-throw expected errors with proper status codes
+            }
+
+            const statusCode = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+            const errorMessage = error.message || 'Internal server error';
+
+            throw new HttpException(
+                {
+                    message: errorMessage,
+                    status: statusCode,
+                    details: error.details || 'An unexpected error occurred.',
+                },
+                statusCode,
+            );
+        }
+    }
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
-    @Post('lfi-tpp')
+    @Post('lfi-tpp/master')
     @UseInterceptors(FileFieldsInterceptor([
         { name: 'organization_data', maxCount: 1 },]))
     @ApiConsumes('multipart/form-data')
@@ -256,15 +306,15 @@ export class UploadController {
 
             const organizationFilePath = files.organization_data[0].path;
 
-            const tppLfi = await this.uploadService.updateTppAndLfi(organizationFilePath,);
+            const tppLfi = await this.uploadService.updateTppAndLfi(req.user.email, organizationFilePath,);
 
-            unlink(organizationFilePath, (unlinkErr) => {
-                if (unlinkErr) {
-                    console.error('Error deleting organization data file:', unlinkErr);
-                } else {
-                    console.log(`Deleted temp organization data file: ${organizationFilePath}`);
-                }
-            });
+            // unlink(organizationFilePath, (unlinkErr) => {
+            //     if (unlinkErr) {
+            //         console.error('Error deleting organization data file:', unlinkErr);
+            //     } else {
+            //         console.log(`Deleted temp organization data file: ${organizationFilePath}`);
+            //     }
+            // });
             return {
                 message: 'Organization data processed successfully.',
                 result: tppLfi,
@@ -272,7 +322,7 @@ export class UploadController {
             }
         } catch (error) {
             if (error instanceof HttpException) {
-                throw error; // Re-throw expected errors with proper status codes
+                throw error;
             }
 
             const statusCode = error.status || HttpStatus.INTERNAL_SERVER_ERROR;

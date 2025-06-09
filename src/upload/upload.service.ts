@@ -127,6 +127,7 @@ export class UploadService {
         uploadedAt: new Date(),
         raw_log_path: file1Path,
         payment_log_path: file2Path,
+        key: 'inputFiles',
         status: 'Failed',
         uploadedBy: userEmail,
         remarks: 'File UploadUpload Failed, processing Stopped',
@@ -156,6 +157,7 @@ export class UploadService {
         raw_log_path: file1Path,
         payment_log_path: file2Path,
         status: 'Processing',
+        key: 'inputFiles',
         uploadedBy: userEmail,
         remarks: 'File Uploaded, processing started',
         log: [
@@ -618,7 +620,7 @@ export class UploadService {
           );
         }
       }
-      return processedRecords
+      return processedRecords.length
 
       // Perform insert or update based on interaction_id
       //   const bulkOps = totalHubFeecalculation.map((record) => ({
@@ -1401,7 +1403,22 @@ export class UploadService {
     }
   }
 
-  async getUploadLogData(paginationDTO: PaginationDTO) {
+  async getMasterLogCsv(batchId: string) {
+    try {
+      const logData = await this.uploadLog.findOne({ _id: batchId });
+      if (!logData) {
+        throw new HttpException('Batch ID not found', HttpStatus.NOT_FOUND);
+      }
+      const filePath = logData.master_log_path;
+      return filePath;
+    } catch (error) {
+      console.error("Error in getMasterLogCsv:", error);
+      throw new Error("Failed to retrieve Master Data CSV");
+
+    }
+  }
+
+  async getUploadLogData(key: string, paginationDTO: PaginationDTO) {
     try {
       const offset = paginationDTO.offset
         ? Number(paginationDTO.offset)
@@ -1428,6 +1445,10 @@ export class UploadService {
         const searchRegex = new RegExp(search, "i");
         options.$or = [{ "batchNo": search }, { "uploadedBy": searchRegex }];
       }
+      if (key) {
+        options.key = key;
+      }
+
       const total = await this.uploadLog.countDocuments(options).exec();
       const uploadlogData = await this.uploadLog.find(options).skip(offset).limit(limit).sort({ createdAt: -1 }).lean<any>()
       // return uploadlogData;
@@ -1446,8 +1467,52 @@ export class UploadService {
     }
   }
 
-  async updateTppAndLfi(organizationPath: string,) {
+  async updateTppAndLfi(userEmail: string, organizationPath: string,) {
+    let logUpdate: any;
     try {
+      if (!organizationPath) {
+        logUpdate = await this.uploadLog.create({
+          batchNo: `${Date.now()}`,
+          uploadedAt: new Date(),
+          master_log_path: organizationPath,
+          key: 'lfiTppMaster',
+          status: 'Failed',
+          uploadedBy: userEmail,
+          remarks: 'File UploadUpload Failed, processing stopped',
+          log: [
+            {
+              description: "Uploading Failed for TPP LFI Master data file",
+              status: "Failed",
+              errorDetail: "Missing file1Path for Tpp LFI Master data file"
+            }
+          ],
+        }
+        )
+
+        throw new HttpException({
+          message: 'Missing TPP LFI Master data file',
+          status: 400
+        }, HttpStatus.BAD_REQUEST);
+      }
+      else {
+        logUpdate = await this.uploadLog.create({
+          batchNo: `${Date.now()}`,
+          uploadedAt: new Date(),
+          master_log_path: organizationPath,
+          status: 'Processing',
+          key: 'lfiTppMaster',
+          uploadedBy: userEmail,
+          remarks: 'File Uploaded, processing started',
+          log: [
+            {
+              description: "Processing and updating TPP and LFI Master data file",
+              status: "In Progress",
+              errorDetail: null
+            }
+          ]
+        }
+        )
+      }
       const organizationData: any[] = [];
       await new Promise((resolve, reject) => {
         fs.createReadStream(organizationPath)
@@ -1461,6 +1526,22 @@ export class UploadService {
               // console.log('iam data1Error', data1Error)
             } catch (error) {
               console.error('Validation failed for Organization data headers:', error.message);
+              await this.uploadLog.findByIdAndUpdate(
+                logUpdate._id,
+                {
+                  $set: {
+                    status: 'Failed',
+                    remarks: 'Failed to validate Organization data headers',
+                  },
+                  $push: {
+                    log: {
+                      description: error.message,
+                      status: 'Failed',
+                      errorDetail: error.message,
+                    },
+                  },
+                }
+              );
               reject(new HttpException(
                 {
                   message: error.message,
@@ -1490,7 +1571,18 @@ export class UploadService {
           .on('error', reject);
       });
       // console.log('iam organizationData', organizationData)
-
+      await this.uploadLog.findByIdAndUpdate(
+        logUpdate._id,
+        {
+          $push: {
+            log: {
+              description: `Header Validation Completed For Organization csv`,
+              status: 'Completed',
+              errorDetail: null
+            }
+          }
+        }
+      );
       const lfiData = organizationData.filter(record => record.Size === 'LFI' && record.ContactType === 'Business');
       const tppData = organizationData.filter(record => record.Size === 'TPP' && record.ContactType === 'Business');
 
@@ -1500,12 +1592,45 @@ export class UploadService {
       if (tppData.length > 0) {
         await this.bulkCreateOrUpdateTPP(tppData);
       }
+
+      await this.uploadLog.findByIdAndUpdate(
+        logUpdate._id,
+        {
+          $set: {
+            status: 'Completed',
+            remarks: 'Database Process Completed',
+          },
+          $push: {
+            log: {
+              description: `Filtering Completed and the Latest Master Data Updated In the Database`,
+              status: 'Completed',
+              errorDetail: null
+            },
+          },
+        }
+      );
       return {
         lfiData: lfiData.length,
         tppData: tppData.length,
       };
     } catch (error) {
       console.error('Error reading organization data:', error);
+      await this.uploadLog.findByIdAndUpdate(
+        logUpdate._id,
+        {
+          $set: {
+            status: 'Failed',
+            remarks: 'Failed to Process Organization data',
+          },
+          $push: {
+            log: {
+              description: error.message,
+              status: 'Failed',
+              errorDetail: error.message,
+            },
+          },
+        }
+      );
       throw new HttpException(
         {
           message: error.message || 'Failed to read organization data.',

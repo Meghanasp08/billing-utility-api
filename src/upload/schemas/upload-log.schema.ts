@@ -24,11 +24,17 @@ export class uploadLog {
     @Prop({ required: true })
     uploadedAt: Date;
 
-    @Prop({ required: true })
+    @Prop({ required: false })
     raw_log_path: string;
 
-    @Prop({ required: true })
+    @Prop({ required: false })
     payment_log_path: string;
+
+    @Prop({ required: false })
+    master_log_path: string;
+
+    @Prop({ required: true })
+    key: string;
 
     @Prop({ required: true })
     status: string;
