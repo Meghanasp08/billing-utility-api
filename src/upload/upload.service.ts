@@ -363,7 +363,7 @@ export class UploadService {
             },
             $push: {
               log: {
-                description: `Validation error occurred in row ${index + 1} for the field 'paymentType' in the 'Payment Log File': the value does not match any of ${this.paymentTypes}. Invalid value: '${paymentRecord.paymentType}'`,
+                description: `Validation error occurred in row ${index + 2} for the field 'paymentType' in the 'Payment Log File': the value does not match any of ${this.paymentTypes}. Invalid value: '${paymentRecord.paymentType}'`,
                 status: 'Failed',
                 errorDetail: null,
               },
@@ -371,7 +371,7 @@ export class UploadService {
           }
         );
         throw new HttpException({
-          message: `Payment Type is not valid in the ${index + 1} th row, please check the payment log file`,
+          message: `Payment Type is not valid in the ${index + 2} th row, please check the payment log file`,
           status: 400
         }, HttpStatus.BAD_REQUEST);
       }
@@ -386,7 +386,7 @@ export class UploadService {
             },
             $push: {
               log: {
-                description: `Validation error occurred in row ${index + 1} for the field 'amount' in the 'Payment Log File': the value should be a number. Invalid value: '${paymentRecord.amount}'`,
+                description: `Validation error occurred in row ${index + 2} for the field 'amount' in the 'Payment Log File': the value should be a number. Invalid value: '${paymentRecord.amount}'`,
                 status: 'Failed',
                 errorDetail: null,
               },
@@ -394,7 +394,7 @@ export class UploadService {
           }
         );
         throw new HttpException({
-          message: `Validation error occurred in row ${index + 1} for the field 'amount' in the 'Payment Log File': the value should be a number. Invalid value: '${paymentRecord.amount}'`,
+          message: `Validation error occurred in row ${index + 2} for the field 'amount' in the 'Payment Log File': the value should be a number. Invalid value: '${paymentRecord.amount}'`,
           status: 400
         }, HttpStatus.BAD_REQUEST);
       }
@@ -409,7 +409,7 @@ export class UploadService {
             },
             $push: {
               log: {
-                description: `Validation error occurred in row ${index + 1} for the field 'numberOfSuccessfulTransactions' in the 'Raw Log File': the value should be a number. Invalid value: '${paymentRecord.numberOfSuccessfulTransactions}'`,
+                description: `Validation error occurred in row ${index + 2} for the field 'numberOfSuccessfulTransactions' in the 'Raw Log File': the value should be a number. Invalid value: '${paymentRecord.numberOfSuccessfulTransactions}'`,
                 status: 'Failed',
                 errorDetail: null,
               },
@@ -417,7 +417,7 @@ export class UploadService {
           }
         );
         throw new HttpException({
-          message: `Validation error occurred in row ${index + 1} for the field 'numberOfSuccessfulTransactions' in the 'Raw Log File': the value should be a number. Invalid value: '${paymentRecord.numberOfSuccessfulTransactions}'`,
+          message: `Validation error occurred in row ${index + 2} for the field 'numberOfSuccessfulTransactions' in the 'Raw Log File': the value should be a number. Invalid value: '${paymentRecord.numberOfSuccessfulTransactions}'`,
           status: 400
         }, HttpStatus.BAD_REQUEST);
       }
