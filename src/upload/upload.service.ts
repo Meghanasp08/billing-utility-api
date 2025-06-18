@@ -121,7 +121,7 @@ export class UploadService {
     }
 
     let logUpdate: any;
-    if (!file1Path || !file2Path) {
+    if (!file1Path) {
       logUpdate = await this.uploadLog.create({
         batchNo: `${Date.now()}`,
         uploadedAt: new Date(),
@@ -131,22 +131,17 @@ export class UploadService {
         status: 'Failed',
         uploadedBy: userEmail,
         remarks: 'File UploadUpload Failed, processing Stopped',
-        log: [
-          !file1Path ? {
-            description: "Uploading Failed for the raw data log",
-            status: "Failed",
-            errorDetail: "Missing file1Path for raw data log"
-          } : {
-            description: "Uploading Failed for the payment data log",
-            status: "Failed",
-            errorDetail: "Missing file1Path for payment data log"
-          }
+        log: [{
+          description: "Uploading Failed for the raw data log",
+          status: "Failed",
+          errorDetail: "Missing file1Path for raw data log"
+        }
         ],
       }
       )
 
       throw new HttpException({
-        message: !file1Path ? 'Missing raw data file' : !file2Path ? 'Missing payment data file' : 'Both files are required',
+        message: 'Missing raw data file',
         status: 400
       }, HttpStatus.BAD_REQUEST);
     }
@@ -240,69 +235,71 @@ export class UploadService {
     });
 
     // Validate headers for file2
-    await new Promise((resolve, reject) => {
-      fs.createReadStream(file2Path)
-        .pipe(csv())
-        .on('headers', async (headers) => {
-          const normalizedHeaders = headers.map((header) =>
-            header.replace(/^\ufeff/, '').trim()
-          );
-          try {
-            const dataError = validateHeaders(normalizedHeaders, file2HeadersIncludeSchema);
-          } catch (error) {
-            console.error('Validation error for payment log data headers:', error.message);
-            reject(new HttpException(
-              {
-                message: 'Validation failed for payment API log data headers.',
-                status: 400,
-              },
-              HttpStatus.BAD_REQUEST, // Use the appropriate status code constant
-            ));
-            await this.uploadLog.findByIdAndUpdate(
-              logUpdate._id,
-              {
-                $set: {
-                  status: 'Failed',
-                  remarks: 'Failed to validate payment log headers',
-                },
-                $push: {
-                  log: {
-                    description: error.message,
-                    status: 'Failed',
-                    errorDetail: error.message,
-                  },
-                },
-              }
+    if (file2Path !== "") {
+      await new Promise((resolve, reject) => {
+        fs.createReadStream(file2Path)
+          .pipe(csv())
+          .on('headers', async (headers) => {
+            const normalizedHeaders = headers.map((header) =>
+              header.replace(/^\ufeff/, '').trim()
             );
-            reject(new HttpException(
-              {
-                message: 'Validation failed for payment API log data headers.',
-                status: 400,
-              },
-              HttpStatus.BAD_REQUEST
-            ));
-          }
-        })
-        .on('data', (row) => {
-          const normalizedRow: any = {};
-          let isEmptyRow = true;
+            try {
+              const dataError = validateHeaders(normalizedHeaders, file2HeadersIncludeSchema);
+            } catch (error) {
+              console.error('Validation error for payment log data headers:', error.message);
+              reject(new HttpException(
+                {
+                  message: 'Validation failed for payment API log data headers.',
+                  status: 400,
+                },
+                HttpStatus.BAD_REQUEST, // Use the appropriate status code constant
+              ));
+              await this.uploadLog.findByIdAndUpdate(
+                logUpdate._id,
+                {
+                  $set: {
+                    status: 'Failed',
+                    remarks: 'Failed to validate payment log headers',
+                  },
+                  $push: {
+                    log: {
+                      description: error.message,
+                      status: 'Failed',
+                      errorDetail: error.message,
+                    },
+                  },
+                }
+              );
+              reject(new HttpException(
+                {
+                  message: 'Validation failed for payment API log data headers.',
+                  status: 400,
+                },
+                HttpStatus.BAD_REQUEST
+              ));
+            }
+          })
+          .on('data', (row) => {
+            const normalizedRow: any = {};
+            let isEmptyRow = true;
 
-          for (const key in row) {
-            const normalizedKey = key.replace(/^\ufeff/, '').trim();
-            const value = row[key]?.trim();
+            for (const key in row) {
+              const normalizedKey = key.replace(/^\ufeff/, '').trim();
+              const value = row[key]?.trim();
 
-            normalizedRow[normalizedKey] = value;
-            if (value) isEmptyRow = false;
-          }
+              normalizedRow[normalizedKey] = value;
+              if (value) isEmptyRow = false;
+            }
 
-          if (!isEmptyRow) {
-            // normalizedRow['PaymentId'] = normalizedRow['PaymentId'] || normalizedRow['Payment Id'];
-            file2Data.push(normalizedRow);
-          }
-        })
-        .on('end', resolve)
-        .on('error', reject);
-    });
+            if (!isEmptyRow) {
+              // normalizedRow['PaymentId'] = normalizedRow['PaymentId'] || normalizedRow['Payment Id'];
+              file2Data.push(normalizedRow);
+            }
+          })
+          .on('end', resolve)
+          .on('error', reject);
+      });
+    }
 
 
     await this.uploadLog.findByIdAndUpdate(
@@ -310,7 +307,7 @@ export class UploadService {
       {
         $push: {
           log: {
-            description: `Header Validation Completed For Both Raw Log csv and Payment Log csv`,
+            description: file2Path !== "" ? `Header Validation Completed For Both Raw Log csv and Payment Log csv` : `Header Validation Completed For Raw Log csv`,
             status: 'Completed',
             errorDetail: null
           }
@@ -429,8 +426,56 @@ export class UploadService {
 
     const mergedData = await Promise.all(
       file1Data.map(async (rawApiRecord, index) => {
+        let errorTppLfi = rawApiRecord.lfiId === "" || rawApiRecord.tppName === "" || rawApiRecord.tppId === "" || rawApiRecord.lfiName === "";
+        if (errorTppLfi) {
+          await this.uploadLog.findByIdAndUpdate(
+            logUpdate._id,
+            {
+              $set: {
+                status: 'Failed',
+                remarks: `Failed to validate 'Raw Log File`,
+              },
+              $push: {
+                log: {
+                  description: `Validation error occurred in row ${index + 2} for the field 'lfiId/lfiName/tppId/tppName' in the 'Raw Log File': the value is empty`,
+                  status: 'Failed',
+                  errorDetail: null,
+                },
+              },
+            }
+          );
+          throw new HttpException({
+            message: `Validation error occurred in row ${index + 2} for the field 'lfiId/lfiName/tppId/tppName' in the 'Raw Log File': the value is empty`,
+            status: 400
+          }, HttpStatus.BAD_REQUEST);
+        }
         const paymentId = rawApiRecord.paymentId?.trim();
-        const paymentRecord = paymentId ? paymentDataMap.get(paymentId) : null;
+        let paymentRecord: any = null;
+        if (paymentId) {
+          paymentRecord = paymentDataMap.get(paymentId);
+          if (!paymentRecord) {
+            await this.uploadLog.findByIdAndUpdate(
+              logUpdate._id,
+              {
+                $set: {
+                  status: 'Failed',
+                  remarks: `Failed to validate 'Raw Log File`,
+                },
+                $push: {
+                  log: {
+                    description: `Validation Error: No matching record found in Payment Log file for paymentId '${paymentId}' at row ${index + 2}.`,
+                    status: 'Failed',
+                    errorDetail: null,
+                  },
+                },
+              }
+            );
+            throw new Error(
+              `Validation Error: No matching record found in Payment Log file for paymentId '${paymentId}' at row ${index + 2}.`
+            );
+          }
+        }
+        // const paymentRecord = paymentId ? paymentDataMap.get(paymentId) : null;
 
         return {
           [`raw_api_log_data.timestamp`]: rawApiRecord.timestamp || null,
