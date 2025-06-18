@@ -55,20 +55,23 @@ export class UploadController {
                     description: 'Payment Log Data file',
                 },
             },
-            required: ['raw_data', 'payment_data'],
+            required: ['raw_data',],
         },
     })
     @Claims(Claim.LOG_UPLOAD)
     async uploadFiles(@UploadedFiles() files: { raw_data?: Express.Multer.File[]; payment_data?: Express.Multer.File[]; }, @Req() req: any) {
         try {
-            if (!files?.raw_data || !files?.payment_data) {
-                throw new HttpException('Both files are required', HttpStatus.BAD_REQUEST);
+            if (!files?.raw_data) {
+                throw new HttpException('The "raw_data" file is required', HttpStatus.BAD_REQUEST);
             }
 
-            const [raw_dataPath, payment_dataPath] = [
-                files.raw_data[0].path,
-                files.payment_data[0].path,
-            ];
+            // const [raw_dataPath, payment_dataPath] = [
+            //     files.raw_data[0].path,
+            //     files.payment_data[0].path,
+            // ];
+            const raw_dataPath = files.raw_data[0].path;
+            const payment_dataPath = files?.payment_data?.[0]?.path || "";
+
 
             const mergedFilePath = await this.uploadService.mergeCsvFiles(req.user.email, raw_dataPath, payment_dataPath,);
 
