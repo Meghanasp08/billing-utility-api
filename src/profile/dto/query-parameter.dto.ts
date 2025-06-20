@@ -89,4 +89,14 @@ export class QueryParametersDTO {
     @IsBoolean()
     @Transform(({ value }) => value === 'true')
     apiChargeable?: boolean;
+
+    @ApiPropertyOptional({
+        description: 'Filter for API success items',
+        type: Boolean,
+        example: false,
+    })
+    @IsOptional()
+    @IsBoolean()
+    @Transform(({ value }) => value === 'true')
+    success?: boolean;
 }

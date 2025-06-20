@@ -1751,5 +1751,42 @@ export class UploadService {
     });
     await this.TppModel.bulkWrite(bulkOps);
   }
+
+  async filterFiles(file1Path: string) {
+    const file1Data: any[] = [];
+    const interactionIds: Set<string> = new Set();
+    await new Promise<void>((resolve, reject) => {
+      fs.createReadStream(file1Path)
+        .pipe(csv())
+        .on('headers', (headers) => {
+          headers.map((header) => header.replace(/^\ufeff/, '').trim());
+        })
+        .on('data', (row) => {
+          const interactionId = row['interactionId']?.trim();
+          if (interactionId) {
+            interactionIds.add(interactionId);
+          }
+        })
+        .on('end', resolve)
+        .on('error', reject);
+    });
+    console.log(`Extracted InteractionIds: ${Array.from(interactionIds).join(', ')}`);
+    try {
+      const logs = await this.logModel.find({});
+      console.log('logs length', logs[0].raw_api_log_data.interaction_id);
+      const logsToRemove = logs.filter((log) => interactionIds.has(log.raw_api_log_data.interaction_id));
+
+      console.log(`Matching logs to remove: ${logsToRemove.length}`);
+
+      const removalPromises = logsToRemove.map((log) => this.logModel.deleteOne({ _id: log._id }));
+      await Promise.all(removalPromises);
+
+      console.log(`Successfully removed ${logsToRemove.length} logs.`);
+      return logsToRemove.length;
+    } catch (error) {
+      console.error('Error removing logs:', error);
+      throw error;
+    }
+  }
 }
 

@@ -686,6 +686,9 @@ export class ProfileService {
     if (queryParameters.apiChargeable) {
       filter["chargeable"] = queryParameters.apiChargeable
     }
+    if (queryParameters.success) {
+      filter["success"] = queryParameters.success
+    }
 
     if (queryParameters.search) {
       const searchRegex = new RegExp(queryParameters.search, "i");

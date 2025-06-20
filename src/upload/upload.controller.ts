@@ -343,4 +343,61 @@ export class UploadController {
         }
     }
 
+    @ApiBearerAuth()
+    @Post('remove-logs')
+    @UseInterceptors(FileFieldsInterceptor([
+        { name: 'raw_data', maxCount: 1 },]))
+    @ApiConsumes('multipart/form-data')
+    @ApiOperation({
+        summary: 'Upload and merge files',
+        description: 'This endpoint accepts two files: "Payment Log Data" and "Raw API Log Data". The files are validated, processed, merged, and the result will be upload in the database.',
+    })
+    @ApiBody({
+        schema: {
+            type: 'object',
+            properties: {
+                raw_data: {
+                    type: 'string',
+                    format: 'binary',
+                    description: 'Raw API Log Data file',
+                },
+            },
+            required: ['raw_data',],
+        },
+    })
+    async filter(@UploadedFiles() files: { raw_data?: Express.Multer.File[]; }, @Req() req: any) {
+        try {
+            if (!files?.raw_data) {
+                throw new HttpException('The "raw_data" file is required', HttpStatus.BAD_REQUEST);
+            }
+
+            const raw_dataPath = files.raw_data[0].path;
+
+
+            const removeResult = await this.uploadService.filterFiles(raw_dataPath,);
+
+            return {
+                message: 'Logs removed successfully',
+                result: removeResult,
+                statusCode: HttpStatus.OK
+            }
+        } catch (error) {
+            if (error instanceof HttpException) {
+                throw error; // Re-throw expected errors with proper status codes
+            }
+
+            const statusCode = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
+            const errorMessage = error.message || 'Internal server error';
+
+            throw new HttpException(
+                {
+                    message: errorMessage,
+                    status: statusCode,
+                    details: error.details || 'An unexpected error occurred.',
+                },
+                statusCode,
+            );
+        }
+    }
+
 }
