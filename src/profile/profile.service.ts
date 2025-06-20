@@ -68,7 +68,7 @@ export class ProfileService {
       filter["chargeable"] = queryParameters.apiChargeable
     }
     if (queryParameters.success) {
-      filter["chargeable"] = queryParameters.success
+      filter["success"] = queryParameters.success
     }
 
     if (queryParameters.search) {
