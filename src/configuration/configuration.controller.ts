@@ -7,6 +7,7 @@ import { PaginationDTO } from 'src/common/dto/common.dto';
 import { ConfigurationService } from './configuration.service';
 import { CreateApiDto, GetglobalValueDto, UpdateApiDto, UpdateglobalValueDto, UpdateManyDto } from './dto/global_value.dto';
 import { UpdateLfiDataDto } from './dto/lfi_update.dto';
+import { UpdateTppDataDto } from './dto/tpp_update.dto';
 
 
 @ApiTags('configuration')
@@ -19,12 +20,30 @@ export class ConfigurationController {
     @ApiOperation({ summary: 'Update Lfi details like MDP rate and Attended unattended calls.' })
     @Patch('lfi/:id')
     @Claims(Claim.LFI_DIRECTORY_EDIT)
-    async updateLfiData(@Req() req: any, @Param('id') id: string, @Body() updateLfiDataDto: UpdateLfiDataDto,) {
+    async updateLfiData(@Req() req: any, @Param('id') id: string, @Body(ValidationPipe) updateLfiDataDto: UpdateLfiDataDto,) {
         try {
             const lfiData = await this.configService.updateLfiData(id, updateLfiDataDto);
             return {
                 message: 'Lfi data updated successfully',
                 result: lfiData,
+                statusCode: HttpStatus.OK
+            }
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Update Tpp detail Brokerage fee.' })
+    @Patch('tpp/:id')
+    @Claims(Claim.LFI_DIRECTORY_EDIT)
+    async updateTppData(@Req() req: any, @Param('id') id: string, @Body(ValidationPipe) updateTppDataDto: UpdateTppDataDto,) {
+        try {
+            const tppData = await this.configService.updateTppData(id, updateTppDataDto);
+            return {
+                message: 'Tpp data updated successfully',
+                result: tppData,
                 statusCode: HttpStatus.OK
             }
         } catch (error) {

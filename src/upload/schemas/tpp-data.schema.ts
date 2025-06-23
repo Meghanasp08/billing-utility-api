@@ -12,6 +12,9 @@ export class TppData {
     @Prop({ required: true })
     tpp_name: string;
 
+    @Prop({ required: true })
+    brokerage_fee: number;
+
     @Prop({ required: false })
     registered_name: string;
 
