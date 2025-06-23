@@ -1,16 +1,19 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { filter_master, paymentLabelFilters } from 'src/config/app.config';
 import { LfiData, LfiDataDocument } from 'src/upload/schemas/lfi-data.schema';
+import { TppData, TppDataDocument } from 'src/upload/schemas/tpp-data.schema';
 import { CreateApiDto, GetglobalValueDto, UpdateApiDto, UpdateglobalValueDto } from './dto/global_value.dto';
 import { UpdateLfiDataDto } from './dto/lfi_update.dto';
+import { UpdateTppDataDto } from './dto/tpp_update.dto';
 import { ApiDataConfiguration, ApiDataConfigurationDocument } from './schema/api_data.schema';
 import { GlobalConfiguration, GlobalConfigurationDocument } from './schema/global_config.schema';
-import { filter_master,paymentLabelFilters  } from 'src/config/app.config';
 @Injectable()
 export class ConfigurationService {
     constructor(
         @InjectModel(LfiData.name) private lfiModel: Model<LfiDataDocument>,
+        @InjectModel(TppData.name) private tppModel: Model<TppDataDocument>,
         @InjectModel(GlobalConfiguration.name) private globalModel: Model<GlobalConfigurationDocument>,
         @InjectModel(ApiDataConfiguration.name) private apiDataModel: Model<ApiDataConfigurationDocument>,
     ) { }
@@ -29,6 +32,22 @@ export class ConfigurationService {
         );
 
         return updatedLfi;
+    }
+
+    async updateTppData(id: string, updateTppDataDto: UpdateTppDataDto) {
+
+        const existingTpp = await this.tppModel.findById(id);
+        if (!existingTpp) {
+            throw new NotFoundException(`TPP with ID ${id} not found.`);
+        }
+
+        const updatedTpp = await this.tppModel.findByIdAndUpdate(
+            id,
+            { $set: updateTppDataDto },
+            { new: true }
+        );
+
+        return updatedTpp;
     }
 
     async updateGlobalData(id: string, updateGlobalvalueDto: UpdateglobalValueDto) {
