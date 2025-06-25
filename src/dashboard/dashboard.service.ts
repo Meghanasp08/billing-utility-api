@@ -61,7 +61,7 @@ export class DashboardService {
       invoiceUnPaidCount: invoiceUnPaidCount[0]?.total || 0,
       totalRevenue: totalRevenue[0]?.totalApplicableApiHubFee || 0,
       percentageOfRevenueFromPreviousMonth: percentageOfRevenueFromPreviousMonth || 0,
-      revenueTrendLine:revenueTrendLine
+      revenueTrendLine: revenueTrendLine
     };
   }
 
@@ -317,7 +317,7 @@ export class DashboardService {
           $group: {
             _id: {
               year: { $year: "$raw_api_log_data.timestamp" },
-              month: { $month: "$raw_api_log_data.timestampt" },
+              month: { $month: "$raw_api_log_data.timestamp" },
               day: { $dayOfMonth: "$raw_api_log_data.timestamp" }
             },
             revenue: { $sum: "$applicableApiHubFee" }
@@ -375,16 +375,21 @@ export class DashboardService {
     // Final response formatting:
     return {
       revenueTrend: {
-        "1M": oneMonthTrend.map(entry => ({
-          date: entry.date.toISOString().split('T')[0],
-          revenue: entry.revenue
-        })),
-        "6M": sixMonthTrend.map(entry => ({
-          date: entry.date.toISOString().split('T')[0],
-          revenue: entry.revenue
-        }))
+        "1M": oneMonthTrend.map((entry) => {
+          return {
+            date: entry.date.toISOString().split('T')[0],
+            revenue: entry.revenue
+          };
+        }),
+        "6M": sixMonthTrend.map((entry) => {
+          return {
+            date: entry.date.toISOString().split('T')[0],
+            revenue: entry.revenue
+          };
+        })
       }
     };
+
 
   }
 
