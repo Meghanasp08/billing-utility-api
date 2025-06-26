@@ -175,7 +175,7 @@ export class DashboardService {
           },
           unpaid: {
             $sum: {
-              $cond: [{ $eq: ['$status', 0] }, 1, 0]
+              $cond: [{ $eq: ['$status', 2] }, 1, 0]
             }
           }
         }
@@ -205,8 +205,8 @@ export class DashboardService {
       {
         $match: {
           status: 1,
-          month: selectedMonth,
-          year: selectedYear
+          invoice_month: selectedMonth,
+          invoice_year: selectedYear
         }
       },
       {
@@ -226,8 +226,8 @@ export class DashboardService {
       {
         $match: {
           status: 2,
-          month: selectedMonth,
-          year: selectedYear
+          invoice_month: selectedMonth,
+          invoice_year: selectedYear
         }
       },
       {
