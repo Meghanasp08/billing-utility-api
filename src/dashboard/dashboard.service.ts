@@ -34,13 +34,13 @@ export class DashboardService {
     ] = await Promise.all([
       this.getTotalInvoices(data),
       this.getTotalRevenue(data),
-      this.getAvgInvoiceAmount(),
-      this.invoicePaid(),
+      this.getAvgInvoiceAmount(data),
+      this.invoicePaid(data),
       this.getNoOfTpps(),
       this.getNoOfLfis(),
       this.getApiHubFee(),
       this.getLfiToTppFee(),
-      this.getPaidUnpaidInvoices(),
+      this.getPaidUnpaidInvoices(data),
       this.invoicePaidCount(data),
       this.invoiceUnPaidCount(data),
       this.totalRevenue(data),
@@ -82,15 +82,42 @@ export class DashboardService {
   // }
 
   async getTotalInvoices(data) {
-    const now = new Date();
-    const selectedMonth = data?.month ?? now.getMonth(); // JavaScript months are 1-based here
-    const selectedYear = data?.year ?? now.getFullYear();
-    console.log("LOGGING", selectedMonth)
+    // const now = new Date();
+    // const selectedMonth = data?.month ?? now.getMonth(); // JavaScript months are 1-based here
+    // const selectedYear = data?.year ?? now.getFullYear();
+
+    const startDate = data?.startDate
+      ? moment(data?.startDate)
+      : moment().subtract(1, 'month').startOf('month');
+
+    const endDate = data?.endDate
+      ? moment(data?.endDate)
+      : moment().subtract(1, 'month').endOf('month');
+
+    // Convert to YYYYMM for easier numeric comparison
+    const startMonthYear = parseInt(startDate.format('YYYYMM')); // e.g. 202504
+    const endMonthYear = parseInt(endDate.format('YYYYMM'));     // e.g. 202504
+    console.log("LOGGING", startMonthYear, endMonthYear)
+
     return await this.invoiceModel.aggregate([
       {
         $match: {
-          invoice_month: selectedMonth,
-          invoice_year: selectedYear
+          $expr: {
+            $and: [
+              {
+                $gte: [
+                  { $add: [{ $multiply: ["$invoice_year", 100] }, "$invoice_month"] },
+                  startMonthYear
+                ]
+              },
+              {
+                $lte: [
+                  { $add: [{ $multiply: ["$invoice_year", 100] }, "$invoice_month"] },
+                  endMonthYear
+                ]
+              }
+            ]
+          }
         }
       },
       {
@@ -103,15 +130,36 @@ export class DashboardService {
   }
 
   async getTotalRevenue(data) {
-    const now = new Date();
-    const selectedMonth = data?.month ?? now.getMonth(); // JavaScript months are 1-based here
-    const selectedYear = data?.year ?? now.getFullYear();
+    const startDate = data?.startDate
+      ? moment(data?.startDate)
+      : moment().subtract(1, 'month').startOf('month');
 
+    const endDate = data?.endDate
+      ? moment(data?.endDate)
+      : moment().subtract(1, 'month').endOf('month');
+
+    // Convert to YYYYMM for easier numeric comparison
+    const startMonthYear = parseInt(startDate.format('YYYYMM')); // e.g. 202504
+    const endMonthYear = parseInt(endDate.format('YYYYMM'));     // e.g. 202504
     return await this.invoiceModel.aggregate([
       {
         $match: {
-          invoice_month: selectedMonth,
-          invoice_year: selectedYear
+          $expr: {
+            $and: [
+              {
+                $gte: [
+                  { $add: [{ $multiply: ["$invoice_year", 100] }, "$invoice_month"] },
+                  startMonthYear
+                ]
+              },
+              {
+                $lte: [
+                  { $add: [{ $multiply: ["$invoice_year", 100] }, "$invoice_month"] },
+                  endMonthYear
+                ]
+              }
+            ]
+          }
         }
       },
       {
@@ -123,8 +171,41 @@ export class DashboardService {
     ]).exec();
   }
 
-  async getAvgInvoiceAmount() {
+  async getAvgInvoiceAmount(data) {
+
+    const startDate = data?.startDate
+      ? moment(data?.startDate)
+      : moment().subtract(1, 'month').startOf('month');
+
+    const endDate = data?.endDate
+      ? moment(data?.endDate)
+      : moment().subtract(1, 'month').endOf('month');
+
+    // Convert to YYYYMM for easier numeric comparison
+    const startMonthYear = parseInt(startDate.format('YYYYMM')); // e.g. 202504
+    const endMonthYear = parseInt(endDate.format('YYYYMM'));     // e.g. 202504
+
     return await this.invoiceModel.aggregate([
+      {
+        $match: {
+          $expr: {
+            $and: [
+              {
+                $gte: [
+                  { $add: [{ $multiply: ["$invoice_year", 100] }, "$invoice_month"] },
+                  startMonthYear
+                ]
+              },
+              {
+                $lte: [
+                  { $add: [{ $multiply: ["$invoice_year", 100] }, "$invoice_month"] },
+                  endMonthYear
+                ]
+              }
+            ]
+          }
+        }
+      },
       {
         $group: {
           _id: null,
@@ -184,8 +265,40 @@ export class DashboardService {
     }
   }
 
-  async getPaidUnpaidInvoices() {
+  async getPaidUnpaidInvoices(data) {
+
+    const startDate = data?.startDate
+      ? moment(data?.startDate)
+      : moment().subtract(1, 'month').startOf('month');
+
+    const endDate = data?.endDate
+      ? moment(data?.endDate)
+      : moment().subtract(1, 'month').endOf('month');
+
+    // Convert to YYYYMM for easier numeric comparison
+    const startMonthYear = parseInt(startDate.format('YYYYMM')); // e.g. 202504
+    const endMonthYear = parseInt(endDate.format('YYYYMM'));     // e.g. 202504
     return this.invoiceModel.aggregate([
+      {
+        $match: {
+          $expr: {
+            $and: [
+              {
+                $gte: [
+                  { $add: [{ $multiply: ["$invoice_year", 100] }, "$invoice_month"] },
+                  startMonthYear
+                ]
+              },
+              {
+                $lte: [
+                  { $add: [{ $multiply: ["$invoice_year", 100] }, "$invoice_month"] },
+                  endMonthYear
+                ]
+              }
+            ]
+          }
+        }
+      },
       {
         $group: {
           _id: null,
@@ -211,23 +324,78 @@ export class DashboardService {
     ]).exec();
   }
 
-  async invoicePaid() {
+  async invoicePaid(data) {
+
+    const startDate = data?.startDate
+      ? moment(data?.startDate)
+      : moment().subtract(1, 'month').startOf('month');
+
+    const endDate = data?.endDate
+      ? moment(data?.endDate)
+      : moment().subtract(1, 'month').endOf('month');
+
+    // Convert to YYYYMM for easier numeric comparison
+    const startMonthYear = parseInt(startDate.format('YYYYMM')); // e.g. 202504
+    const endMonthYear = parseInt(endDate.format('YYYYMM'));     // e.g. 202504
     return await this.invoiceModel.aggregate([
-      { $match: { status: 1 } },
+      {
+        $match: {
+          status: 1,
+          $expr: {
+            $and: [
+              {
+                $gte: [
+                  { $add: [{ $multiply: ["$invoice_year", 100] }, "$invoice_month"] },
+                  startMonthYear
+                ]
+              },
+              {
+                $lte: [
+                  { $add: [{ $multiply: ["$invoice_year", 100] }, "$invoice_month"] },
+                  endMonthYear
+                ]
+              }
+            ],
+          }
+        }
+      },
       { $group: { _id: null, totalPaid: { $sum: "$total_amount" } } }
     ]).exec()
   }
 
   async invoicePaidCount(data) {
-    const now = new Date();
-    const selectedMonth = data?.month ?? now.getMonth() + 1; // JavaScript months are 1-based here
-    const selectedYear = data?.year ?? now.getFullYear();
+    const startDate = data?.startDate
+      ? moment(data?.startDate)
+      : moment().subtract(1, 'month').startOf('month');
+
+    const endDate = data?.endDate
+      ? moment(data?.endDate)
+      : moment().subtract(1, 'month').endOf('month');
+
+    // Convert to YYYYMM for easier numeric comparison
+    const startMonthYear = parseInt(startDate.format('YYYYMM')); // e.g. 202504
+    const endMonthYear = parseInt(endDate.format('YYYYMM'));     // e.g. 202504
+
     return await this.invoiceModel.aggregate([
       {
         $match: {
           status: 1,
-          invoice_month: selectedMonth,
-          invoice_year: selectedYear
+          $expr: {
+            $and: [
+              {
+                $gte: [
+                  { $add: [{ $multiply: ["$invoice_year", 100] }, "$invoice_month"] },
+                  startMonthYear
+                ]
+              },
+              {
+                $lte: [
+                  { $add: [{ $multiply: ["$invoice_year", 100] }, "$invoice_month"] },
+                  endMonthYear
+                ]
+              }
+            ],
+          }
         }
       },
       {
@@ -240,15 +408,39 @@ export class DashboardService {
   }
 
   async invoiceUnPaidCount(data: any) {
-    const now = new Date();
-    const selectedMonth = data?.month ?? now.getMonth() + 1; // JavaScript months are 1-based here
-    const selectedYear = data?.year ?? now.getFullYear();
+
+    const startDate = data?.startDate
+      ? moment(data?.startDate)
+      : moment().subtract(1, 'month').startOf('month');
+
+    const endDate = data?.endDate
+      ? moment(data?.endDate)
+      : moment().subtract(1, 'month').endOf('month');
+
+    // Convert to YYYYMM for easier numeric comparison
+    const startMonthYear = parseInt(startDate.format('YYYYMM')); // e.g. 202504
+    const endMonthYear = parseInt(endDate.format('YYYYMM'));     // e.g. 202504
+
     return await this.invoiceModel.aggregate([
       {
         $match: {
           status: 2,
-          invoice_month: selectedMonth,
-          invoice_year: selectedYear
+          $expr: {
+            $and: [
+              {
+                $gte: [
+                  { $add: [{ $multiply: ["$invoice_year", 100] }, "$invoice_month"] },
+                  startMonthYear
+                ]
+              },
+              {
+                $lte: [
+                  { $add: [{ $multiply: ["$invoice_year", 100] }, "$invoice_month"] },
+                  endMonthYear
+                ]
+              }
+            ],
+          }
         }
       },
       {
@@ -338,12 +530,12 @@ export class DashboardService {
     const endDate = data?.endDate
       ? new Date(
         moment(data.endDate.toString()).startOf('day').format()
-      ) 
-      : new Date(
-         moment().subtract(1, 'months').endOf('month').format()
       )
-      
-    console.log("HHH",startDate,endDate)
+      : new Date(
+        moment().subtract(1, 'months').endOf('month').format()
+      )
+
+    console.log("HHH", startDate, endDate)
     const sixMonthsAgo = new Date(now);
     sixMonthsAgo.setMonth(now.getMonth() - 5);
     sixMonthsAgo.setDate(1); // from beginning of the 6th month ago
@@ -386,7 +578,7 @@ export class DashboardService {
                 day: "$_id.day"
               }
             },
-            revenue:{ $round: ["$revenue", 3]}
+            revenue: { $round: ["$revenue", 3] }
           }
         },
         { $sort: { date: 1 } }
@@ -418,7 +610,7 @@ export class DashboardService {
                 day: 1
               }
             },
-            revenue: { $round: ["$revenue", 3]}
+            revenue: { $round: ["$revenue", 3] }
           }
         },
         { $sort: { date: 1 } }
