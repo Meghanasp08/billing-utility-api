@@ -407,6 +407,16 @@ export class ProfileService {
             total_applicable_fee: { $sum: "$applicableFee" },
           },
         },
+        {
+          $project: {
+            _id: 1,
+            ...(group === 'tpp' && { tpp_name: 1 }),
+            ...(group === 'lfi' && { lfi_name: 1 }),
+            total_api_hub_fee: { $round: ["$total_api_hub_fee", 3] },
+            total_calculated_fee: { $round: ["$total_calculated_fee", 3] },
+            total_applicable_fee: { $round: ["$total_applicable_fee", 3] },
+          },
+        },
         { $sort: { _id: 1 as 1 | -1 } },
       ];
       const paginatedQuery = [...aggregateQuery, { $skip: numericOffset }, { $limit: numericLimit }];
