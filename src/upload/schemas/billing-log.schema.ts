@@ -251,6 +251,12 @@ export class Log {
   cappedAt: number;
 
   @Prop()
+  brokerage_fee: number;
+
+  @Prop()
+  serviceStatus: boolean;
+
+  @Prop()
   createdAt: Date; // Explicitly define the createdAt field
 
   @Prop()
