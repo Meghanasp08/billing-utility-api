@@ -690,33 +690,103 @@ export class UploadService {
 
   }
 
-  async calculateTotalApiHubFee(data: any) {
-    return data.map((record: any) => {
-      let totalApiHubFee = record.api_hub_fee ?? 0;
-      let apiHubVolume = 1;
-      if (record.group === "payment-bulk" && record.success && record.chargeable) {
-        apiHubVolume = parseInt(record['payment_logs.number_of_successful_transactions'] ?? 1);
-        totalApiHubFee *= apiHubVolume;
-      } else if (record.group === "data" && record.success && record.chargeable) {
-        if (!record.lfiChargable) {
-          const records = parseInt(record["raw_api_log_data.records"] ?? "0", 10);
-          record.numberOfPages = Math.ceil(records / 100) || 1;
-          apiHubVolume = record.numberOfPages;
-          totalApiHubFee *= apiHubVolume;
-        } else {
-          // Use volume when lfiChargable is true
-          apiHubVolume = record.volume ?? 1;
-          totalApiHubFee *= apiHubVolume;
+  // async calculateTotalApiHubFee(data: any) {
+  //   return data.map(async (record: any) => {
+  //     let totalApiHubFee = record.api_hub_fee ?? 0;
+  //     let apiHubVolume = 1;
+  //     if (record.group === "payment-bulk" && record.success && record.chargeable) {
+  //       apiHubVolume = parseInt(record['payment_logs.number_of_successful_transactions'] ?? 1);
+  //       totalApiHubFee *= apiHubVolume;
+  //     } else if (record.group === "data" && record.success && record.chargeable) {
+  //       if (!record.lfiChargable) {
+  //         const records = parseInt(record["raw_api_log_data.records"] ?? "0", 10);
+  //         record.numberOfPages = Math.ceil(records / 100) || 1;
+  //         apiHubVolume = record.numberOfPages;
+  //         totalApiHubFee *= apiHubVolume;
+  //       } else {
+  //         // Use volume when lfiChargable is true
+  //         apiHubVolume = record.volume ?? 1;
+  //         totalApiHubFee *= apiHubVolume;
 
+  //       }
+  //     }
+
+  //     // Tpp status update and brokerage fee calculation for log
+  //     const tppId = record.raw_api_log_data?.tpp_id;
+  //     let brokerage_fee = 0;
+  //     let serviceStatus: boolean = false;
+
+  //     if (tppId) {
+  //       const tppDoc = await this.TppModel.findById(tppId, {
+  //         brokerage_fee: 1,
+  //         serviceStatus: 1,
+  //       }).lean();
+
+  //       if (tppDoc) {
+  //         brokerage_fee = tppDoc.brokerage_fee
+  //         serviceStatus = tppDoc.serviceStatus;
+  //       }
+  //     }
+  //     return {
+  //       ...record,
+  //       applicableApiHubFee: totalApiHubFee.toFixed(3),
+  //       apiHubVolume: apiHubVolume,
+  //       brokerage_fee,
+  //       serviceStatus
+  //     };
+  //   });
+  // }
+  async calculateTotalApiHubFee(data: any[]) {
+    const results = await Promise.all(
+      data.map(async (record: any) => {
+        let totalApiHubFee = record.api_hub_fee ?? 0;
+        let apiHubVolume = 1;
+
+        if (record.group === "payment-bulk" && record.success && record.chargeable) {
+          apiHubVolume = parseInt(record['payment_logs.number_of_successful_transactions'] ?? 1);
+          totalApiHubFee *= apiHubVolume;
+        } else if (record.group === "data" && record.success && record.chargeable) {
+          if (!record.lfiChargable) {
+            const records = parseInt(record["raw_api_log_data.records"] ?? "0", 10);
+            record.numberOfPages = Math.ceil(records / 100) || 1;
+            apiHubVolume = record.numberOfPages;
+            totalApiHubFee *= apiHubVolume;
+          } else {
+            apiHubVolume = record.volume ?? 1;
+            totalApiHubFee *= apiHubVolume;
+          }
         }
-      }
-      return {
-        ...record,
-        applicableApiHubFee: totalApiHubFee.toFixed(3),
-        apiHubVolume: apiHubVolume
-      };
-    });
+
+        //Get TPP ID and fetch from DB
+        const tppId = record.raw_api_log_data?.tpp_id;
+        let brokerage_fee = 0;
+        let serviceStatus: boolean = false;
+
+        if (tppId) {
+          const tppDoc = await this.TppModel.findById(tppId, {
+            brokerage_fee: 1,
+            serviceStatus: 1,
+          }).lean();
+
+          if (tppDoc) {
+            brokerage_fee = tppDoc.brokerage_fee
+            serviceStatus = tppDoc.serviceStatus;
+          }
+        }
+
+        return {
+          ...record,
+          applicableApiHubFee: totalApiHubFee.toFixed(3),
+          apiHubVolume,
+          brokerage_fee,
+          serviceStatus
+        };
+      })
+    );
+
+    return results;
   }
+
   async attendedUpdateOnNumberOfPage(data: any) {
     let lfiPageDataArray: any[] = [];
     const updatedData = data.map((record: any) => {
