@@ -5164,7 +5164,7 @@ export class InvoiceService {
             for (const item of data?.tpp_usage_per_lfi) {
                 lfi_list += `<tr>
                         <td class="table-td">00${lfi_count}</td>
-                        <td class="table-td">${item?._id} - ${monthName} ${data.invoice_year}</td>
+                        <td class="table-td">${item?.lfi_data?.lfi_name} - ${monthName} ${data.invoice_year}</td>
                         <td class="table-total">${item.full_total} </td>
                     </tr>`
                 lfi_count++
@@ -5185,8 +5185,8 @@ export class InvoiceService {
                 <table>
                 <thead>
                     <tr>
-                    <th>#</th>
-                    <th>Item</th>
+                    <th>No.</th>
+                    <th>Licensed Financial Institutions</th>
                     <th class="table-total">Total</th>
                     </tr>
                 </thead>
@@ -5203,12 +5203,12 @@ export class InvoiceService {
             for (const service_items of serviceInitiationItem.items) {
                 service_initiation += ` <tr>
                 <td>${service_items.description}</td>
-                <td class="table-total">${service_items.quantity}</td>
-                <td class="table-total">${service_items.unit_price}</td>
-                <td class="table-total">${service_items.total}</td>
+                <td class="table-total">${service_items.quantity ?? 0}</td>
+                <td class="table-total">${service_items.unit_price ?? 0}</td>
+                <td class="table-total">${service_items.total ?? 0}</td>
                 <td class="table-total">5</td>
-                <td class="table-total">${service_items.vat_amount}</td>
-                <td class="table-total">${service_items.full_total}</td>
+                <td class="table-total">${service_items.vat_amount ?? 0}</td>
+                <td class="table-total">${service_items.full_total ?? 0}</td>
             </tr>`;
             }
 
@@ -5220,12 +5220,12 @@ export class InvoiceService {
 
                 data_sharing += ` <tr>
                 <td>${data_items.description}</td>
-                <td class="table-total">${data_items.quantity}</td>
-                <td class="table-total">${data_items.unit_price}</td>
-                <td class="table-total">${data_items.total}</td>
+                <td class="table-total">${data_items.quantity ?? 0}</td>
+                <td class="table-total">${data_items?.unit_price ?? 0}</td>
+                <td class="table-total">${data_items.total ?? 0}</td>
                 <td class="table-total">5</td>
-                <td class="table-total">${data_items.vat_amount}</td>
-                <td class="table-total">${data_items.full_total}</td>
+                <td class="table-total">${data_items.vat_amount ?? 0}</td>
+                <td class="table-total">${data_items.full_total ?? 0}</td>
             </tr>`;
             }
             console.log("CHECK2")
@@ -5241,11 +5241,11 @@ export class InvoiceService {
                 <div class="header">
                     <div>
                         <div class="title">Collection Memo</div>
-                        <div class="memo-number">Collection Memo # 00${displayIndex}</div>
+                        <div class="memo-number">Collection Memo 00${displayIndex}</div>
                         <div class="date">${moment(data.generated_at).format('D MMMM YYYY')}</div>
                         <div class="lfi-info">
-                            <div>LFI ${memo.lfi_name}</div>
-                            <div class="lfi-info-space">LFI-${memo._id}</div>
+                            <div>${memo.lfi_name}</div>
+                            <div class="lfi-info-space" style="margin-bottom: 1em;">${memo._id}</div>
                             <div class="lfi-info-space">4567 Business Park<br>Innovation City, IC 12345<br>United Arab
                                 Emirates</div>
                         </div>
@@ -5254,8 +5254,8 @@ export class InvoiceService {
                 </div>
 
                 <div class="collection-summary">
-                <div class="summary-title">LFI-${memo.lfi_name} Collection Summary:</div>
-                <div class="billing-period">Billing Period: ${moment(data.billing_period_start).format('D MMMM YYYY')} to ${moment(data.billing_period_end).format('Do MMMM YYYY')}</div>
+                <div class="summary-title">${memo.lfi_name} Collection Summary:</div>
+                <div class="billing-period">Billing Period: ${firstDay} to ${lastDay}</div>
                 <table>
                   <thead>
                     <tr>
@@ -5273,9 +5273,9 @@ export class InvoiceService {
                     collection_memo += `
                     <tr>
                       <td>${label.label} ${label?.capped === true ? '**' : ''} </td>
-                      <td class="table-total">${label.quantity}</td>
-                      <td class="table-total">${label.unit_price.toFixed(4)}</td>
-                      <td class="table-total">${label.total.toFixed(2)}</td>
+                      <td class="table-total">${label?.quantity ?? 0}</td>
+                      <td class="table-total">${label?.unit_price.toFixed(3) ?? 0}</td>
+                      <td class="table-total">${label?.total.toFixed(2) ?? 0}</td>
                     </tr>
               `;
                 }
@@ -5283,7 +5283,7 @@ export class InvoiceService {
                 collection_memo += `
                     <tr>
                       <td class="sub-total-row" colspan="3">SUB TOTAL</td>
-                      <td class="table-total">${memo.full_total.toFixed(2)}</td>
+                      <td class="table-total">${memo?.full_total.toFixed(2) ?? 0}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -5294,7 +5294,7 @@ export class InvoiceService {
                     </div>
                     <div class="invoice-total">
                         <span class="invoice-total-label">Total</span>
-                        <span class="invoice-total-amount">AED ${(memo.full_total).toFixed(2)}</span>
+                        <span class="invoice-total-amount">AED ${(memo?.full_total).toFixed(2) ?? 0}</span>
                     </div>
                 </div>
               </div>
@@ -5368,7 +5368,6 @@ export class InvoiceService {
         }
         
         .billing-row {
-            display: flex;
             margin-bottom: 5px;
         }
 
@@ -5381,6 +5380,13 @@ export class InvoiceService {
             color: #1b194f;
         }
 
+        .billing-label-grid {
+            display: grid;
+            grid-template-columns: 150px 10px 1fr;
+            align-items: start;
+            font-weight: 500;
+            gap: 5px;
+        }
         .statement-summary {
             margin-bottom: 30px;
         }
@@ -5396,6 +5402,12 @@ export class InvoiceService {
             font-size: 14px;
             font-weight: 600;
             color: #1b194f;
+        }
+        .label-text {
+            text-align: left;
+        }
+        .colon {
+            text-align: center;
         }
 
         table {
@@ -5470,7 +5482,6 @@ export class InvoiceService {
         }
 
         .invoice-number span {
-            background-color: #ffeb3b;
             padding: 2px 5px;
             font-weight: bold;
         }
@@ -5706,7 +5717,6 @@ export class InvoiceService {
             }
 
             .invoice-number span {
-    background-color: #ffeb3b;
     padding: 2px 5px;
     font-weight: bold;
     -webkit-print-color-adjust: exact;
@@ -5733,48 +5743,66 @@ export class InvoiceService {
             </div> -->
         </div>
 
-
         <div class="billing-info">
-            <h3 class="billing-sub-label">Billed To:</h3>
+            <h3 class="billing-sub-label">Billed To</h3>
             <div class="billing-row">
-                <div class="billing-label">TPP NAME :</div>
+            <div class="billing-label-grid">
+                <div class="billing-label">TPP NAME </div>
+                <div class="colon">:</div>
                 <div class="billing-sub-label">${data.tpp_name}</div>
+            </div>     
             </div>
             <div class="billing-row">
-                <div class="billing-label">TPP ID :</div>
-                <div class="billing-sub-label">${data.tpp_id}</div>
+                <div class="billing-label-grid">
+                    <div class="billing-label">TPP ID </div>
+                    <div class="colon">:</div>
+                    <div class="billing-sub-label">${data.tpp_id}</div>
+                </div>
             </div>
             <div class="billing-row">
-                <div class="billing-label">TPP ADDRESS :</div>
-                <div class="billing-sub-label">${data.billing_address_line1}<br>${data.billing_address_line2}<br>${data.billing_address_country}</div>
+                <div class="billing-label-grid">
+                    <div class="billing-label">TPP ADDRESS </div>
+                    <div class="colon">:</div>
+                    <div class="billing-sub-label">${data.billing_address_line1}<br>${data.billing_address_line2}<br>${data.billing_address_country}</div>
+                </div>
             </div>
 
             <div class="billing-row">
-                <div class="billing-label">Invoice Currency: </div>
-                <div class="billing-sub-label">AED </div>
+                <div class="billing-label-grid">
+                    <div class="billing-label">Invoice Currency </div>
+                    <div class="colon">:</div>
+                    <div class="billing-sub-label">AED </div>
+                </div>
             </div>
             <div class="billing-row">
-                <div class="billing-label">TPP TRN: </div>
-                <div class="billing-sub-label" ></div>
+                <div class="billing-label-grid">
+                    <div class="billing-label">TPP TRN </div>
+                    <div class="colon">:</div>
+                    <div class="billing-sub-label" ></div>
+                </div>
             </div>
             <div class="billing-row">
-                <div class="billing-label">Nebras TRN: </div>
-                <div class="billing-sub-label"></div>
+                <div class="billing-label-grid">
+                    <div class="billing-label">Nebras TRN </div>
+                    <div class="colon">:</div>
+                    <div class="billing-sub-label"></div>
+                </div>
             </div>
             <div class="billing-row">
-                <div class="billing-label">Period: </div>
-                <div class="billing-sub-label">${firstDay} to ${lastDay}
-
+                <div class="billing-label-grid">
+                    <div class="billing-label">Period</div>
+                    <div class="colon">:</div>
+                    <div class="billing-sub-label">${firstDay} to ${lastDay}
+                </div>
             </div>
         </div>
-
 
 
         <div class="statement-summary">
             <table>
                 <thead>
                     <tr>
-                        <th>Number </th>
+                        <th>No.</th>
                         <th>Description </th>
                         <th class="table-total">Taxable Amount </th>
                         <th class="table-total">VAT % </th>
@@ -5841,45 +5869,48 @@ export class InvoiceService {
                 <div class="header">
                     <div>
                         <div class="invoice-title">Tax Invoice </div>
-                        <div class="invoice-number">Invoice # <span>- ${data.invoice_number}</span></div>
+                        <div class="invoice-number">Invoice <span> ${data.invoice_number}</span></div>
                         <div class="invoice-date">${moment(data.createdAt).format('DD MMMM YYYY')}</div>
                     </div>
 
                 </div>
                 <div class="billing-info">
                     <div class="billing-row">
-                        <div class="billing-label">Billing Period: </div>
-                        <div class="billing-sub-label">${moment(data.billing_period_start).format('D MMMM YYYY')} to ${moment(data.billing_period_end).format('Do MMMM YYYY')}</div>
+                        <div class="billing-label-grid">
+                            <div class="billing-label">Billing Period </div>
+                            <div class="colon">:</div>
+                            <div class="billing-sub-label">${firstDay} to ${lastDay}</div>
+                        </div>
                     </div>
                     <div class="billing-row">
-                        <div class="billing-label">Invoice Currency: </div>
-                        <div class="billing-sub-label">AED </div>
+                        <div class="billing-label-grid">
+                            <div class="billing-label">Invoice Currency </div>
+                            <div class="colon">:</div>
+                            <div class="billing-sub-label">AED </div>
+                        </div>
                     </div>
                     <div class="billing-row">
-                        <div class="billing-label">TPP TRN: </div>
-                        <div class="billing-sub-label" >TPP123456</div>
+                        <div class="billing-label-grid">
+                            <div class="billing-label">TPP TRN </div>
+                            <div class="colon">:</div>
+                            <div class="billing-sub-label" >TPP123456</div>
+                        </div>
                     </div>
                   
                     <div class="billing-row">
-                        <div class="billing-label">Invoice Number: </div>
-                        <div class="billing-sub-label">${data.invoice_number}</div>
+                        <div class="billing-label-grid">
+                            <div class="billing-label">Nebras TRN </div>
+                            <div class="colon">:</div>
+                            <div class="billing-sub-label"></div>
+                        </div>
                     </div>
-               
-                
-              
-                    <div class="billing-row">
-                        <div class="billing-label">Nebras TRN: </div>
-                        <div class="billing-sub-label"></div>
-                    </div>
-               
         
                 </div>
-
 
                 <div class="section">
                     <div class="section-title">
                         <span>Service Initiation</span>
-                        <span class="section-amount">${serviceInitiationItem?.category_total ?? 0}</span>
+                        
                     </div>
 
                     <table>
@@ -5907,7 +5938,7 @@ export class InvoiceService {
                 <div class="section">
                     <div class="section-title">
                         <span>Data Sharing</span>
-                        <span class="section-amount">${dataSharingItem?.category_total ?? 0}</span>
+                       
                     </div>
 
                     <table>
