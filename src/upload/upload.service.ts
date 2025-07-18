@@ -655,7 +655,7 @@ export class UploadService {
         console.error("Error creating CSV file:", error);
       }
     } else {
-      return totalHubFeecalculation
+      // return totalHubFeecalculation
 
       const existingInteractionIds = await this.logModel.distinct("raw_api_log_data.interaction_id");
 
