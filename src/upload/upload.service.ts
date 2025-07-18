@@ -655,7 +655,7 @@ export class UploadService {
         console.error("Error creating CSV file:", error);
       }
     } else {
-      // return totalHubFeecalculation
+      return totalHubFeecalculation
 
       const existingInteractionIds = await this.logModel.distinct("raw_api_log_data.interaction_id");
 
@@ -761,16 +761,16 @@ export class UploadService {
         }
 
         //Get TPP ID and fetch from DB
-        const tppId = record.raw_api_log_data?.tpp_id;
+        const tppId = record["raw_api_log_data.tpp_id"];
         let brokerage_fee = 0;
         let serviceStatus: boolean = false;
-
         if (tppId) {
-          const tppDoc = await this.TppModel.findById(tppId, {
+          const tppDoc = await this.TppModel.findOne({
+            tpp_id: tppId
+          }, {
             brokerage_fee: 1,
             serviceStatus: 1,
           }).lean();
-
           if (tppDoc) {
             brokerage_fee = tppDoc.brokerage_fee
             serviceStatus = tppDoc.serviceStatus;
