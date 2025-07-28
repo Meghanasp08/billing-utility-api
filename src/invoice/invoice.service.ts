@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import * as fs from "fs";
 // import * as moment from 'moment';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
 import { Model, Types } from 'mongoose';
 import { PaginationEnum, } from 'src/common/constants/constants.enum';
 import { PaginationDTO } from 'src/common/dto/common.dto';
@@ -9,11 +11,7 @@ import { collection_memo_config, invoice_config } from 'src/config/app.config';
 import { GlobalConfiguration, GlobalConfigurationDocument } from 'src/configuration/schema/global_config.schema';
 import { MailService } from 'src/mail/mail.service';
 import { UpdateInvoiceValueDto } from './dto/invoice.dto';
-import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
 const puppeteer = require('puppeteer')
-import { CronJob } from 'cron'
-import { Cron } from '@nestjs/schedule'
 const moment = require('moment-timezone');
 const { Parser } = require('json2csv');
 
@@ -2012,6 +2010,7 @@ export class InvoiceService {
                         'raw_api_log_data.tpp_id': tpp_id,
                         "chargeable": true,
                         "success": true,
+                        "duplicate": false,
                         "apiHubVolume": { $gt: 0 },
                         $and: [
                             startDate && endDate
@@ -2316,6 +2315,7 @@ export class InvoiceService {
                         'raw_api_log_data.tpp_id': tpp_id,
                         "lfiChargable": true,
                         "success": true,
+                        "duplicate": false,
                         "volume": { $gt: 0 },
                         $and: [
                             startDate && endDate
@@ -2608,6 +2608,34 @@ export class InvoiceService {
                 // }
             ]
         )
+        // const serviceFee = await this.logsModel.aggregate([
+        //     {
+        //         $match: {
+        //             "raw_api_log_data.tpp_id":
+        //                 tpp_id,
+        //             chargeable: true,
+        //             success: true,
+        //             duplicate: false,
+        //             successfullQuote: true
+        //         }
+        //     },
+        //     {
+        //         $group: {
+        //             _id: {
+        //                 category: "$api_category",
+        //             },
+        //             quantity: {
+        //                 $sum: 1
+        //             },
+        //             unit_price: {
+        //                 $first: "$brokerage_fee"
+        //             },
+        //             total: {
+        //                 $sum: "$brokerage_fee"
+        //             }
+        //         }
+        //     }
+        // ])
         let invoice_total = result.reduce((sum, item) => sum + item.category_total, 0);
         let lfi_total = result_of_lfi.reduce((sum, item) => sum + item.full_total, 0);
 
