@@ -130,6 +130,7 @@ export class InvoiceService {
                             "raw_api_log_data.tpp_id": tpp?.tpp_id,
                             "chargeable": true,
                             "success": true,
+                            "duplicate": false,
                             $expr: {
                                 $and: [
                                     {
@@ -562,6 +563,7 @@ export class InvoiceService {
                             "raw_api_log_data.tpp_id": tpp?.tpp_id,
                             lfiChargable: true,
                             success: true,
+                            "duplicate": false,
                             $expr: {
                                 $and: [
                                     {
@@ -959,7 +961,7 @@ export class InvoiceService {
                 ]
             )
             const invoice_total = result.reduce((sum, item) => sum + item.category_total, 0);
-            const vat = result.reduce((sum, item) => sum + item.vat_amount, 0); 
+            const vat = result.reduce((sum, item) => sum + item.vat_amount, 0);
 
             const lfi_total = result_of_lfi.reduce((sum, item) => sum + item.full_total, 0);
             const total = Number(invoice_total) + Number(lfi_total);
@@ -3291,6 +3293,7 @@ export class InvoiceService {
                     'raw_api_log_data.lfi_id': lfi_id,
                     'lfiChargable': true,
                     "success": true,
+                    "duplicate": false,
                     "volume": { $gt: 0 },
                     $and: [
                         startDate && endDate
