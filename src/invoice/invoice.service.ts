@@ -109,6 +109,7 @@ export class InvoiceService {
         const paymentLargeValueFee = globalConfiData.find(item => item.key === "paymentLargeValueFee")?.value ?? 0;
         const bulkLargeCorporatefee = globalConfiData.find(item => item.key === "bulkLargeCorporatefee")?.value ?? 0;
         const dataLargeCorporateMdp = globalConfiData.find(item => item.key === "dataLargeCorporateMdp")?.value ?? 0;
+        const dataServiceFeePercentage = globalConfiData.find(item => item.key === "serviceFeePercentage")?.value ?? 0;
 
         const vatPercent = vat?.value ?? 5
         const vatDecimal = vatPercent / 100;
@@ -563,7 +564,7 @@ export class InvoiceService {
                             "raw_api_log_data.tpp_id": tpp?.tpp_id,
                             lfiChargable: true,
                             success: true,
-                            "duplicate": false,
+                            duplicate: false,
                             $expr: {
                                 $and: [
                                     {
@@ -960,6 +961,222 @@ export class InvoiceService {
                     }
                 ]
             )
+            const serviceFee = await this.logsModel.aggregate([
+                {
+                    $match: {
+                        "raw_api_log_data.tpp_id":
+                            tpp?.tpp_id,
+                        chargeable: true,
+                        success: true,
+                        duplicate: false,
+                        successfullQuote: true,
+                        $expr: {
+                            $and: [
+                                {
+                                    $eq: [
+                                        {
+                                            $month: "$raw_api_log_data.timestamp"
+                                        },
+                                        month
+                                    ]
+                                },
+                                {
+                                    $eq: [
+                                        {
+                                            $year: "$raw_api_log_data.timestamp"
+                                        },
+                                        year
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                },
+                // {
+                //     $group: {
+                //         _id: {
+                //             category: "$api_category",
+                //             description: "service_fee"
+                //         },
+                //         quantity: {
+                //             $sum: 1
+                //         },
+                //         unit_price: {
+                //             $first: "$brokerage_fee"
+                //         },
+                //         total: {
+                //             $sum: "$brokerage_fee"
+                //         }
+                //     }
+                // },
+                {
+                    $group: {
+                        _id: {
+                            category: "Insurance Brokerage Collection",
+                            description: "service_fee"
+                        },
+                        quantity: {
+                            $sum: "$brokerage_fee"
+                        },
+                        unit_price: { $first: dataServiceFeePercentage },
+                        total: {
+                            $sum: {
+                                $multiply: ["$brokerage_fee", dataServiceFeePercentage / 100]
+                            }
+                        }
+                    }
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        description: "$_id.category",
+                        key: {
+                            $toLower: {
+                                $replaceAll: {
+                                    input: "$_id.category",
+                                    find: " ",
+                                    replacement: "_"
+                                }
+                            }
+                        },
+                        quantity: 1,
+                        unit_price: 1,
+                        total: {
+                            $round: ["$total", 2]
+                        },
+                        vat_amount: {
+                            $round: [
+                                { $multiply: ["$total", vatDecimal] }, // Assuming 5% VAT
+                                2
+                            ]
+                        },
+                        full_total: {
+                            $round: [
+                                { $add: ["$total", { $multiply: ["$total", vatDecimal] }] },
+                                2
+                            ]
+                        }
+                    }
+                }
+            ])
+            const commisions = await this.logsModel.aggregate([
+                {
+                    $match: {
+                        "raw_api_log_data.tpp_id":
+                            "4c52000d-3db6-44db-8be3-8418cae0e2f1",
+                        chargeable: true,
+                        success: true,
+                        duplicate: false,
+                        successfullQuote: true,
+                        $expr: {
+                            $and: [
+                                {
+                                    $eq: [
+                                        {
+                                            $month:
+                                                "$raw_api_log_data.timestamp"
+                                        },
+                                        month
+                                    ]
+                                },
+                                {
+                                    $eq: [
+                                        {
+                                            $year:
+                                                "$raw_api_log_data.timestamp"
+                                        },
+                                        year
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                },
+
+                {
+                    $group: {
+                        _id: {
+                            lfi_id: "$raw_api_log_data.lfi_id",
+                            label: "$api_category"
+                        },
+                        quantity: {
+                            $sum: 1
+                        },
+                        unit_price: {
+                            $first: "$brokerage_fee"
+                        },
+                        total: {
+                            $sum: "$brokerage_fee"
+                        }
+                    }
+                },
+                {
+                    $match: {
+                        total: {
+                            $ne: 0
+                        }
+                    }
+                },
+                {
+                    $group: {
+                        _id: "$_id.lfi_id",
+                        items: {
+                            $push: {
+                                description: "$_id.label",
+                                quantity: "$quantity",
+                                unit_price: {
+                                    $round: ["$unit_price", 4]
+                                },
+                                total: {
+                                    $round: ["$total", 2]
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "lfi_data",
+                        localField: "_id",
+                        foreignField: "lfi_id",
+                        as: "lfi_data"
+                    }
+                },
+                {
+                    $unwind: {
+                        path: "$lfi_data"
+                    }
+                },
+
+                {
+                    $addFields: {
+                        full_total: {
+                            $round: [
+                                {
+                                    $sum: "$labels.total"
+                                },
+                                2
+                            ]
+                        },
+                        lfi_name: "$lfi_data.lfi_name"
+                    }
+                }
+            ])
+            if (serviceFee.length > 0) {
+                const sub_total = serviceFee.reduce((sum, item) => sum + item.total, 0);
+                const vat_amount = serviceFee.reduce((sum, item) => sum + item.vat_amount, 0);
+                const category_total = serviceFee.reduce((sum, item) => sum + item.full_total, 0);
+
+                result.push({
+                    items: serviceFee,
+                    sub_total: Number(sub_total.toFixed(2)),
+                    vat_amount: Number(vat_amount.toFixed(2)),
+                    category_total: Number(category_total.toFixed(2)),
+                    category: "service_fee"
+                });
+            }
+
+            // return result;
             const invoice_total = result.reduce((sum, item) => sum + item.category_total, 0);
             const vat = result.reduce((sum, item) => sum + item.vat_amount, 0);
 
@@ -1077,7 +1294,6 @@ export class InvoiceService {
             }
         }
     }
-
     async ensureCategories(inputArray) {
         // Define default values for each category
         const globalConfiData = await this.globalModel.find();

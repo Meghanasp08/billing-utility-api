@@ -782,6 +782,7 @@ export class ProfileService {
       duplicate: entry.duplicate,
       brokerage_fee: entry.brokerage_fee,
       serviceStatus: entry.serviceStatus,
+      successQuote: entry.successfullQuote,
     }));
 
     const outputPath = './output/log_data.csv';
