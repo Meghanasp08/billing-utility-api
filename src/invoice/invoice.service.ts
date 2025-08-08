@@ -557,7 +557,7 @@ export class InvoiceService {
                     }
                 ]
             );
-            const result_of_lfi = await this.logsModel.aggregate(
+            const result_of_lfi_data = await this.logsModel.aggregate(
                 [
                     {
                         $match: {
@@ -1012,7 +1012,7 @@ export class InvoiceService {
                 {
                     $group: {
                         _id: {
-                            category: "Insurance Brokerage Collection",
+                            category: "$api_category",
                             description: "service_fee"
                         },
                         quantity: {
@@ -1029,7 +1029,21 @@ export class InvoiceService {
                 {
                     $project: {
                         _id: 0,
-                        description: "$_id.category",
+                        description: {
+                            $switch: {
+                                branches: [
+                                    {
+                                        case: { $eq: ["$_id.category", "Insurance Quote Sharing"] },
+                                        then: "Insurance Brokerage Collection"
+                                    },
+                                    {
+                                        case: { $eq: ["$_id.category", "FX Quotes"] },
+                                        then: "FX Quotes"
+                                    }
+                                ],
+                                default: "$_id.category"
+                            }
+                        },
                         key: {
                             $toLower: {
                                 $replaceAll: {
@@ -1059,108 +1073,163 @@ export class InvoiceService {
                     }
                 }
             ])
-            const commisions = await this.logsModel.aggregate([
-                {
-                    $match: {
-                        "raw_api_log_data.tpp_id":
-                            "4c52000d-3db6-44db-8be3-8418cae0e2f1",
-                        chargeable: true,
-                        success: true,
-                        duplicate: false,
-                        successfullQuote: true,
-                        $expr: {
-                            $and: [
-                                {
-                                    $eq: [
-                                        {
-                                            $month:
-                                                "$raw_api_log_data.timestamp"
-                                        },
-                                        month
-                                    ]
-                                },
-                                {
-                                    $eq: [
-                                        {
-                                            $year:
-                                                "$raw_api_log_data.timestamp"
-                                        },
-                                        year
-                                    ]
-                                }
-                            ]
-                        }
+            const commisionData = await this.logsModel.aggregate([{
+                $match: {
+                    "raw_api_log_data.tpp_id":
+                        tpp?.tpp_id,
+                    chargeable: true,
+                    success: true,
+                    duplicate: false,
+                    successfullQuote: true,
+                    $expr: {
+                        $and: [
+                            {
+                                $eq: [
+                                    {
+                                        $month:
+                                            "$raw_api_log_data.timestamp"
+                                    },
+                                    month
+                                ]
+                            },
+                            {
+                                $eq: [
+                                    {
+                                        $year:
+                                            "$raw_api_log_data.timestamp"
+                                    },
+                                    year
+                                ]
+                            }
+                        ]
                     }
-                },
+                }
+            },
 
-                {
-                    $group: {
-                        _id: {
-                            lfi_id: "$raw_api_log_data.lfi_id",
-                            label: "$api_category"
-                        },
-                        quantity: {
-                            $sum: 1
-                        },
-                        unit_price: {
-                            $first: "$brokerage_fee"
-                        },
-                        total: {
-                            $sum: "$brokerage_fee"
-                        }
+            {
+                $group: {
+                    _id: {
+                        lfi_id: "$raw_api_log_data.lfi_id",
+                        label: "$api_category"
+                    },
+                    quantity: {
+                        $sum: 1
+                    },
+                    unit_price: {
+                        $first: "$brokerage_fee"
+                    },
+                    total: {
+                        $sum: "$brokerage_fee"
                     }
-                },
-                {
-                    $match: {
-                        total: {
-                            $ne: 0
-                        }
-                    }
-                },
-                {
-                    $group: {
-                        _id: "$_id.lfi_id",
-                        items: {
-                            $push: {
-                                description: "$_id.label",
-                                quantity: "$quantity",
-                                unit_price: {
-                                    $round: ["$unit_price", 4]
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    description: {
+                        $switch: {
+                            branches: [
+                                {
+                                    case: { $eq: ["$_id.label", "Insurance Quote Sharing"] },
+                                    then: "Insurance Brokerage Collection"
                                 },
-                                total: {
-                                    $round: ["$total", 2]
+                                {
+                                    case: { $eq: ["$_id.label", "FX Quotes"] },
+                                    then: "FX Quotes"
                                 }
+                            ],
+                            default: "$_id.label"
+                        }
+                    },
+                    quantity: 1,
+                    unit_price: 1,
+                    total: {
+                        $round: ["$total", 2]
+                    },
+                    vat_amount: {
+                        $round: [
+                            { $multiply: ["$total", vatDecimal] }, // Assuming 5% VAT
+                            2
+                        ]
+                    },
+                    full_total: {
+                        $round: [
+                            { $add: ["$total", { $multiply: ["$total", vatDecimal] }] },
+                            2
+                        ]
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    key: {
+                        $toLower: {
+                            $replaceAll: {
+                                input: "$description",
+                                find: " ",
+                                replacement: "_"
                             }
                         }
                     }
-                },
-                {
-                    $lookup: {
-                        from: "lfi_data",
-                        localField: "_id",
-                        foreignField: "lfi_id",
-                        as: "lfi_data"
-                    }
-                },
-                {
-                    $unwind: {
-                        path: "$lfi_data"
-                    }
-                },
-
-                {
-                    $addFields: {
-                        full_total: {
-                            $round: [
-                                {
-                                    $sum: "$labels.total"
-                                },
-                                2
-                            ]
-                        },
-                        lfi_name: "$lfi_data.lfi_name"
+                }
+            },
+            {
+                $match: {
+                    total: {
+                        $ne: 0
                     }
                 }
+            },
+            {
+                $group: {
+                    _id: "$_id.lfi_id",
+                    commissions: {
+                        $push: {
+                            label: "$description",
+                            quantity: "$quantity",
+                            unit_price: {
+                                $round: ["$unit_price", 4]
+                            },
+                            total: {
+                                $round: ["$total", 2]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $lookup: {
+                    from: "lfi_data",
+                    localField: "_id",
+                    foreignField: "lfi_id",
+                    as: "lfi_data"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$lfi_data"
+                }
+            },
+
+            {
+                $addFields: {
+                    full_total: {
+                        $round: [
+                            {
+                                $sum: {
+                                    $map: {
+                                        input: "$commissions",
+                                        as: "item",
+                                        in: "$$item.total"
+                                    }
+                                }
+                            },
+                            2
+                        ]
+                    },
+                    lfi_name: "$lfi_data.lfi_name"
+                }
+            }
             ])
             if (serviceFee.length > 0) {
                 const sub_total = serviceFee.reduce((sum, item) => sum + item.total, 0);
@@ -1175,8 +1244,8 @@ export class InvoiceService {
                     category: "service_fee"
                 });
             }
-
-            // return result;
+            const result_of_lfi = await this.lfiCommissionMerge(result_of_lfi_data, commisionData);
+            // return result_of_lfi;
             const invoice_total = result.reduce((sum, item) => sum + item.category_total, 0);
             const vat = result.reduce((sum, item) => sum + item.vat_amount, 0);
 
@@ -1293,6 +1362,26 @@ export class InvoiceService {
                 }
             }
         }
+    }
+
+    async lfiCommissionMerge(lfiData: any, commissionData: any) {
+        const resultMap = new Map();
+
+        // Add from array1
+        lfiData.forEach((item: { _id: any; }) => {
+            resultMap.set(item._id, { ...item });
+        });
+
+        // Merge from array2
+        commissionData.forEach(item => {
+            if (resultMap.has(item._id)) {
+                Object.assign(resultMap.get(item._id), item); // merge if ID exists
+            } else {
+                resultMap.set(item._id, { ...item }); // insert if new
+            }
+        });
+
+        return Array.from(resultMap.values());
     }
     async ensureCategories(inputArray) {
         // Define default values for each category

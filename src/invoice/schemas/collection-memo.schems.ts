@@ -6,11 +6,11 @@ export const CollectionMemoSchema = new mongoose.Schema(
         invoice_number: String,
         lfi_id: String,
         lfi_name: String,
-        lfi_email:String,
+        lfi_email: String,
         billing_period_start: Date,  // Month First
         billing_period_end: Date,   // Month Last
-        invoice_month:Number,
-        invoice_year:Number,
+        invoice_month: Number,
+        invoice_year: Number,
         generated_at: Date,        // Generate Date
         currency: String,         //AED default
         tpp: Array,
@@ -23,6 +23,6 @@ export const CollectionMemoSchema = new mongoose.Schema(
     },
     {
         timestamps: true,
-        collection: 'collection_memo'
+        collection: 'lfi_statement'
     }
 )

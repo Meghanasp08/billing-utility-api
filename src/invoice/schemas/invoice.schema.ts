@@ -1,5 +1,5 @@
 
-import * as mongoose from 'mongoose'
+import * as mongoose from 'mongoose';
 import { InvoiceStatus } from 'src/common/constants/constants.enum';
 
 export const InvoiceSchema = new mongoose.Schema(
@@ -7,7 +7,7 @@ export const InvoiceSchema = new mongoose.Schema(
     invoice_number: String,
     tpp_id: String,
     tpp_name: String,
-    tpp_email:String,
+    tpp_email: String,
     billing_address_line1: String,
     billing_address_line2: String,
     billing_address_city: String,
@@ -31,11 +31,11 @@ export const InvoiceSchema = new mongoose.Schema(
     invoice_total: Number,
     lfi_total: Number,
     status: { type: Number, default: InvoiceStatus.UNPAID },
-    status_description:String,
+    status_description: String,
     notes: String,
   },
   {
     timestamps: true,
-    collection: 'invoices'
+    collection: 'tpp_invoice'
   }
 )
