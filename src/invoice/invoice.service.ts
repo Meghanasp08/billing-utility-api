@@ -5440,9 +5440,8 @@ export class InvoiceService {
 
             const dataSharingItem = data?.invoice_items.find(item => item.category === 'data_sharing') ?? [];
             let data_sharing = ''
-            console.log("CHECK", dataSharingItem)
+
             for (const data_items of dataSharingItem?.items) {
-                console.log("CHECK1")
 
                 data_sharing += ` <tr>
                 <td>${data_items.description}</td>
@@ -5454,7 +5453,6 @@ export class InvoiceService {
                 <td class="table-total">${data_items.full_total ?? 0}</td>
             </tr>`;
             }
-            console.log("CHECK2")
 
             let collection_memo = ''
             let displayIndex = 0;
@@ -5467,6 +5465,7 @@ export class InvoiceService {
                 <div class="header">
                     <div>
                         <div class="title">Collection Memo</div>
+                        <h3>Nebras Collection Services</h3>
                         <div class="memo-number">Collection Memo 00${displayIndex}</div>
                         <div class="date">${moment(data.generated_at).format('D MMMM YYYY')}</div>
                         <div class="lfi-info">
@@ -5846,7 +5845,11 @@ export class InvoiceService {
             color: #1b194f;
             font-weight: bold;
         }
-
+        .header h3 {
+            font-size: 20px;
+            margin: 6;
+            color: #000046;
+        }
 
 
         .collection-summary {
@@ -6461,6 +6464,12 @@ export class InvoiceService {
             color: #000046;
         }
 
+        .header h3 {
+            font-size: 20px;
+            margin: 8;
+            color: #000046;
+        }
+
         .logo img {
             height: 80px;
         }
@@ -6566,6 +6575,7 @@ export class InvoiceService {
         <div class="header">
             <div>
                 <h1>LFI STATEMENT OF FEE</h1>
+                <h3>Nebras Collection Services</h3>
                 <p style="color: #1b194f;">Fee Statement 001<br>${moment(data.createdAt).format('DD MMMM YYYY')} </p>
                 <p class="lif-details"><br>${data.lfi_name}<br>LFI ID:${data.lfi_id}</p>
                 <p class="lif-details">${data?.lfi_details?.addressLine_2}</p>
