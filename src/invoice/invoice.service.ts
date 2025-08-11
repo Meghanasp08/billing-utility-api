@@ -109,6 +109,7 @@ export class InvoiceService {
         const paymentLargeValueFee = globalConfiData.find(item => item.key === "paymentLargeValueFee")?.value ?? 0;
         const bulkLargeCorporatefee = globalConfiData.find(item => item.key === "bulkLargeCorporatefee")?.value ?? 0;
         const dataLargeCorporateMdp = globalConfiData.find(item => item.key === "dataLargeCorporateMdp")?.value ?? 0;
+        const dataServiceFeePercentage = globalConfiData.find(item => item.key === "serviceFeePercentage")?.value ?? 0;
 
         const vatPercent = vat?.value ?? 5
         const vatDecimal = vatPercent / 100;
@@ -556,14 +557,14 @@ export class InvoiceService {
                     }
                 ]
             );
-            const result_of_lfi = await this.logsModel.aggregate(
+            const result_of_lfi_data = await this.logsModel.aggregate(
                 [
                     {
                         $match: {
                             "raw_api_log_data.tpp_id": tpp?.tpp_id,
                             lfiChargable: true,
                             success: true,
-                            "duplicate": false,
+                            duplicate: false,
                             $expr: {
                                 $and: [
                                     {
@@ -914,7 +915,7 @@ export class InvoiceService {
                     // },
                     {
                         $addFields: {
-                            full_total: {
+                            full_total_data: {
                                 $round: [
                                     {
                                         $sum: "$labels.total"
@@ -960,6 +961,293 @@ export class InvoiceService {
                     }
                 ]
             )
+            const serviceFee = await this.logsModel.aggregate([
+                {
+                    $match: {
+                        "raw_api_log_data.tpp_id":
+                            tpp?.tpp_id,
+                        chargeable: true,
+                        success: true,
+                        duplicate: false,
+                        successfullQuote: true,
+                        $expr: {
+                            $and: [
+                                {
+                                    $eq: [
+                                        {
+                                            $month: "$raw_api_log_data.timestamp"
+                                        },
+                                        month
+                                    ]
+                                },
+                                {
+                                    $eq: [
+                                        {
+                                            $year: "$raw_api_log_data.timestamp"
+                                        },
+                                        year
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                },
+                // {
+                //     $group: {
+                //         _id: {
+                //             category: "$api_category",
+                //             description: "service_fee"
+                //         },
+                //         quantity: {
+                //             $sum: 1
+                //         },
+                //         unit_price: {
+                //             $first: "$brokerage_fee"
+                //         },
+                //         total: {
+                //             $sum: "$brokerage_fee"
+                //         }
+                //     }
+                // },
+                {
+                    $group: {
+                        _id: {
+                            category: "$api_category",
+                            description: "service_fee"
+                        },
+                        quantity: {
+                            $sum: "$brokerage_fee"
+                        },
+                        unit_price: { $first: dataServiceFeePercentage },
+                        total: {
+                            $sum: {
+                                $multiply: ["$brokerage_fee", dataServiceFeePercentage / 100]
+                            }
+                        }
+                    }
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        description: {
+                            $switch: {
+                                branches: [
+                                    {
+                                        case: { $eq: ["$_id.category", "Insurance Quote Sharing"] },
+                                        then: "Insurance Brokerage Collection"
+                                    },
+                                    {
+                                        case: { $eq: ["$_id.category", "FX Quotes"] },
+                                        then: "FX Brokerage Collection"
+                                    }
+                                ],
+                                default: "$_id.category"
+                            }
+                        },
+                        key: {
+                            $toLower: {
+                                $replaceAll: {
+                                    input: "$_id.category",
+                                    find: " ",
+                                    replacement: "_"
+                                }
+                            }
+                        },
+                        quantity: 1,
+                        unit_price: 1,
+                        total: {
+                            $round: ["$total", 2]
+                        },
+                        vat_amount: {
+                            $round: [
+                                { $multiply: ["$total", vatDecimal] }, // Assuming 5% VAT
+                                2
+                            ]
+                        },
+                        full_total: {
+                            $round: [
+                                { $add: ["$total", { $multiply: ["$total", vatDecimal] }] },
+                                2
+                            ]
+                        }
+                    }
+                }
+            ])
+            const commisionData = await this.logsModel.aggregate([{
+                $match: {
+                    "raw_api_log_data.tpp_id":
+                        tpp?.tpp_id,
+                    chargeable: true,
+                    success: true,
+                    duplicate: false,
+                    successfullQuote: true,
+                    $expr: {
+                        $and: [
+                            {
+                                $eq: [
+                                    {
+                                        $month:
+                                            "$raw_api_log_data.timestamp"
+                                    },
+                                    month
+                                ]
+                            },
+                            {
+                                $eq: [
+                                    {
+                                        $year:
+                                            "$raw_api_log_data.timestamp"
+                                    },
+                                    year
+                                ]
+                            }
+                        ]
+                    }
+                }
+            },
+
+            {
+                $group: {
+                    _id: {
+                        lfi_id: "$raw_api_log_data.lfi_id",
+                        label: "$api_category"
+                    },
+                    quantity: {
+                        $sum: 1
+                    },
+                    unit_price: {
+                        $first: "$brokerage_fee"
+                    },
+                    total: {
+                        $sum: "$brokerage_fee"
+                    }
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    description: {
+                        $switch: {
+                            branches: [
+                                {
+                                    case: { $eq: ["$_id.label", "Insurance Quote Sharing"] },
+                                    then: "Insurance Brokerage Collection"
+                                },
+                                {
+                                    case: { $eq: ["$_id.label", "FX Quotes"] },
+                                    then: "FX Brokerage Collection"
+                                }
+                            ],
+                            default: "$_id.label"
+                        }
+                    },
+                    quantity: 1,
+                    unit_price: 1,
+                    total: {
+                        $round: ["$total", 2]
+                    },
+                    vat_amount: {
+                        $round: [
+                            { $multiply: ["$total", vatDecimal] }, // Assuming 5% VAT
+                            2
+                        ]
+                    },
+                    full_total: {
+                        $round: [
+                            { $add: ["$total", { $multiply: ["$total", vatDecimal] }] },
+                            2
+                        ]
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    key: {
+                        $toLower: {
+                            $replaceAll: {
+                                input: "$description",
+                                find: " ",
+                                replacement: "_"
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $match: {
+                    total: {
+                        $ne: 0
+                    }
+                }
+            },
+            {
+                $group: {
+                    _id: "$_id.lfi_id",
+                    commissions: {
+                        $push: {
+                            key: "$key",
+                            brokerage: true,
+                            label: "$description",
+                            quantity: "$quantity",
+                            unit_price: {
+                                $round: ["$unit_price", 4]
+                            },
+                            total: {
+                                $round: ["$total", 2]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $lookup: {
+                    from: "lfi_data",
+                    localField: "_id",
+                    foreignField: "lfi_id",
+                    as: "lfi_data"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$lfi_data"
+                }
+            },
+
+            {
+                $addFields: {
+                    full_total_commission: {
+                        $round: [
+                            {
+                                $sum: {
+                                    $map: {
+                                        input: "$commissions",
+                                        as: "item",
+                                        in: "$$item.total"
+                                    }
+                                }
+                            },
+                            2
+                        ]
+                    },
+                    lfi_name: "$lfi_data.lfi_name"
+                }
+            },
+            ])
+            if (serviceFee.length > 0) {
+                const sub_total = serviceFee.reduce((sum, item) => sum + item.total, 0);
+                const vat_amount = serviceFee.reduce((sum, item) => sum + item.vat_amount, 0);
+                const category_total = serviceFee.reduce((sum, item) => sum + item.full_total, 0);
+
+                result.push({
+                    items: serviceFee,
+                    sub_total: Number(sub_total.toFixed(2)),
+                    vat_amount: Number(vat_amount.toFixed(2)),
+                    category_total: Number(category_total.toFixed(2)),
+                    category: "service_fee"
+                });
+            }
+            const result_of_lfi = await this.lfiCommissionMerge(result_of_lfi_data, commisionData);
+            // return result_of_lfi;
             const invoice_total = result.reduce((sum, item) => sum + item.category_total, 0);
             const vat = result.reduce((sum, item) => sum + item.vat_amount, 0);
 
@@ -1022,14 +1310,17 @@ export class InvoiceService {
                     const new_tpp_data = {
                         tpp_id: tpp_id,
                         tpp_name: tpp?.tpp_name,
-                        collection_memo_subitem: obj.labels,
+                        collection_memo_subitem: [
+                            ...(obj?.labels || []),
+                            ...(obj?.commissions || [])
+                        ],
                         full_total: obj?.full_total,
                         vat_percent: vatPercent,
                         // vat: obj?.vat,
                         // actual_total: obj?.actual_total,
                         date: new Date()
                     };
-
+                    // new_tpp_data.collection_memo_subitem.push(obj.commissions);
                     const tppExists = collection_memo_data.tpp.some((t: any) => t.tpp_id === tpp_id);
                     console.log("LOG_ID2")
                     if (!tppExists) {
@@ -1060,7 +1351,10 @@ export class InvoiceService {
                         tpp: [{
                             tpp_id: tpp_id,
                             tpp_name: tpp?.tpp_name,
-                            collection_memo_subitem: obj?.labels,
+                            collection_memo_subitem: [
+                                ...(obj?.labels || []),
+                                ...(obj?.commissions || [])
+                            ],
                             full_total: obj?.full_total,
                             vat_percent: 5,
                             // vat: obj?.vat,
@@ -1077,6 +1371,35 @@ export class InvoiceService {
             }
         }
     }
+
+
+    async lfiCommissionMerge(lfiData: any[], commissionData: any[]) {
+        const resultMap = new Map();
+
+        // Step 1: Merge without calculating
+        lfiData.forEach(item => {
+            resultMap.set(item._id, { ...item });
+        });
+
+        commissionData.forEach(item => {
+            if (resultMap.has(item._id)) {
+                const existing = resultMap.get(item._id);
+                const merged = { ...existing, ...item };
+                resultMap.set(item._id, merged);
+            } else {
+                resultMap.set(item._id, { ...item });
+            }
+        });
+
+        // Step 2: Now calculate full_total after merge
+        resultMap.forEach((merged, id) => {
+            merged.full_total = (merged.full_total_data || 0) - (merged.full_total_commission || 0);
+            resultMap.set(id, merged);
+        });
+
+        return Array.from(resultMap.values());
+    }
+
 
     async ensureCategories(inputArray) {
         // Define default values for each category
@@ -5454,6 +5777,21 @@ export class InvoiceService {
             </tr>`;
             }
 
+            const serviceFeeItem = data?.invoice_items.find(item => item.category === 'service_fee');
+            let service_fee = ''
+
+            for (const service_fee_items of serviceFeeItem.items) {
+                service_fee += ` <tr>
+                <td>${service_fee_items.description}</td>
+                <td class="table-total">${service_fee_items.quantity ?? 0}</td>
+                <td class="table-total">${service_fee_items.unit_price ?? 0}</td>
+                <td class="table-total">${service_fee_items.total ?? 0}</td>
+                <td class="table-total">5</td>
+                <td class="table-total">${service_fee_items.vat_amount ?? 0}</td>
+                <td class="table-total">${service_fee_items.full_total ?? 0}</td>
+            </tr>`;
+            }
+
             let collection_memo = ''
             let displayIndex = 0;
             for (const memo of data?.tpp_usage_per_lfi || []) {
@@ -6162,6 +6500,7 @@ export class InvoiceService {
                             </tr>
                         </tbody>
                     </table>
+                    
                 </div>
 
                 <div class="section">
@@ -6188,12 +6527,38 @@ export class InvoiceService {
                                 <td class="sub-total-row" colspan="6">SUB TOTAL</td>
                                 <td class="table-total">${dataSharingItem?.sub_total ?? 0}</td>
                             </tr>
-                            <tr class="vat-row">
-                                <td class="sub-total-row" colspan="6">VAT</td>
-                                <td class="table-total">${dataSharingItem?.vat_amount ?? 0}</td>
+                            
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">
+                        <span>Service Fee</span>
+                        
+                    </div>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Description </th>
+                                <th class="table-total">Vol</th>
+                                <th class="table-total">Unit Price</th>
+                                <th class="table-total">Taxable Amount </th>
+                                <th class="table-total">VAT % </th>
+                                <th class="table-total">VAT Amount  </th>
+                                <th class="table-total">Gross Amount </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${service_fee}
+                            <tr class="">
+                                <td class="sub-total-row " colspan="6">SUB TOTAL</td>
+                                <td class="table-total">${serviceFeeItem?.category_total ?? 0}</td>
                             </tr>
                         </tbody>
                     </table>
+                    
                 </div>
 
                 <div class="invoice-total">

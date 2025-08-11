@@ -1342,7 +1342,7 @@ export class UploadService {
       .map(api => ({ endpoint: api.api_endpoint, method: api.api_operation.toUpperCase() }));
 
     const QuotChargableUrls = apiData
-      .filter(api => api.quote_status === true)
+      .filter(api => api.chargeable_quote_fee === true)
       .map(api => ({ endpoint: api.api_endpoint, method: api.api_operation.toUpperCase() }));
 
 
@@ -1497,7 +1497,7 @@ export class UploadService {
         $or: [
           { chargeable_api_hub_fee: true },
           { chargeable_LFI_TPP_fee: true },
-          { quote_status: true },
+          { chargeable_quote_fee: true },
         ]
       });
       const processedData = await this.determineChargeableAndSuccess(data, apiData, logId);
