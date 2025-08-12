@@ -5660,7 +5660,7 @@ export class InvoiceService {
             headerTemplate: await this.header_template(),
             footerTemplate: await this.footer_template(),
             margin: {
-                top: '100px',
+                top: '80px',
                 bottom: '100px',
                 left: '20px',
                 right: '20px'
@@ -5713,8 +5713,8 @@ export class InvoiceService {
             for (const item of data?.tpp_usage_per_lfi) {
                 lfi_list += `<tr>
                         <td class="table-td">00${lfi_count}</td>
-                        <td class="table-td">${item?.lfi_data?.lfi_name} - ${monthName} ${data.invoice_year}</td>
-                        <td class="table-total">${item.full_total} </td>
+                        <td class="table-td">${item?.lfi_data?.lfi_name} - ${item?.lfi_data?.lfi_id} (${item.full_total >= 0 ? 'Debit' : 'Credit'})</td>
+                        <td class="table-total">${ Math.abs(item.full_total)} </td>
                     </tr>`
                 lfi_count++
 
@@ -5817,50 +5817,76 @@ export class InvoiceService {
                 </div>
 
                 <div class="collection-summary">
-                <div class="summary-title">${memo.lfi_name} Collection Summary:</div>
-                <div class="billing-period">Billing Period: ${firstDay} to ${lastDay}</div>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Charge Type</th>
-                      <th class="table-total">Vol</th>
-                      <th class="table-total">Unit Price</th>
-                      <th class="table-total">Total</th>
-                    </tr>
-                </thead>
-                <tbody>
+                    <div class="summary-title">${memo.lfi_name} Collection Summary:</div>
+                    <div class="billing-period">Billing Period: ${firstDay} to ${lastDay}</div>
+                    <table>
+                    <thead>
+                        <tr>
+                        <th>Charge Type</th>
+                        <th class="table-total">Vol</th>
+                        <th class="table-total">Unit Price</th>
+                        <th class="table-total">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
             `;
 
-                for (const label of memo.labels || []) {
+                    for (const label of memo.labels || []) {
 
+                        collection_memo += `
+                        <tr>
+                        <td>${label.label} ${label?.capped === true ? '**' : ''} </td>
+                        <td class="table-total">${label?.quantity ?? 0}</td>
+                        <td class="table-total">${label?.unit_price.toFixed(3) ?? 0}</td>
+                        <td class="table-total">${label?.total.toFixed(2) ?? 0}</td>
+                        </tr>
+                `;
+                    }
+
+                if(memo?.commissions && memo?.commissions.length != 0){   
                     collection_memo += `
-                    <tr>
-                      <td>${label.label} ${label?.capped === true ? '**' : ''} </td>
-                      <td class="table-total">${label?.quantity ?? 0}</td>
-                      <td class="table-total">${label?.unit_price.toFixed(3) ?? 0}</td>
-                      <td class="table-total">${label?.total.toFixed(2) ?? 0}</td>
-                    </tr>
-              `;
-                }
+                        </tbody>
+                        </table> 
+                        <div class="summary-title">Commissions</div>
+                        <table>
+                        <thead>
+                            <tr>
+                            <th>Charge Type</th>
+                            <th class="table-total">Vol</th>
+                            <th class="table-total">Unit Price</th>
+                            <th class="table-total">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
 
+                    for (const label of memo.commissions || []) {
+
+                            collection_memo += `
+                            <tr>
+                            <td>${label.label} </td>
+                            <td class="table-total">${label?.quantity ?? 0}</td>
+                            <td class="table-total">${label?.unit_price.toFixed(3) ?? 0}</td>
+                            <td class="table-total">${label?.total.toFixed(2) ?? 0}</td>
+                            </tr>
+                    `;
+                    }     
+                }        
+                 
                 collection_memo += `
-                    <tr>
-                      <td class="sub-total-row" colspan="3">SUB TOTAL</td>
-                      <td class="table-total">${memo?.full_total.toFixed(2) ?? 0}</td>
-                    </tr>
-                  </tbody>
-                </table>
-          
-                <div class="invoice-summary-wrapper">
-                    <div class="note">
-                        ** - Inclusive of capped amount
-                    </div>
-                    <div class="invoice-total">
-                        <span class="invoice-total-label">Total</span>
-                        <span class="invoice-total-amount">AED ${(memo?.full_total).toFixed(2) ?? 0}</span>
+                    </tbody>
+                    </table>
+            
+                    <div class="invoice-summary-wrapper">
+                        <div class="note">
+                            ** - Inclusive of capped amount
+                        </div>
+                        <div class="invoice-total">
+                            <span class="invoice-total-label">SUB TOTAL (${memo.full_total >= 0 ? 'Debit' : 'Credit'})</span>
+                            <span class="invoice-total-amount">AED ${(Math.abs(memo?.full_total)).toFixed(2) ?? 0}</span> 
+                        </div>
                     </div>
                 </div>
-              </div>
 
                 <div class="note">
                     Note- This is a collection memo on behalf of the LFIs and Nebras is authorized to collect fees on behalf of the Licensed Financial Institutes.
@@ -5868,7 +5894,7 @@ export class InvoiceService {
                 
 
             </div>
-        </div>
+            </div>
               
               
             `;
@@ -5976,9 +6002,14 @@ export class InvoiceService {
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom:30px;
+            margin-bottom:10px !important;;
             font-size:14px;
         }
+
+        table-bottom {
+            
+        }    
+        
 
         thead {
             background-color: #c2c1eb !important;
@@ -6079,7 +6110,7 @@ export class InvoiceService {
         }
 
         .section {
-            margin-bottom: 30px;
+            margin-bottom: 15px;
         }
 
         .section-title {
@@ -6284,11 +6315,11 @@ export class InvoiceService {
             }
 
             .invoice-number span {
-    padding: 2px 5px;
-    font-weight: bold;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
+                padding: 2px 5px;
+                font-weight: bold;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
 
         }
 
@@ -6366,12 +6397,12 @@ export class InvoiceService {
 
 
         <div class="statement-summary">
-            <table>
+            <table  class="table-bottom">
                 <thead>
                     <tr>
                         <th>No.</th>
                         <th>Description </th>
-                        <th class="table-total">Taxable Amount </th>
+                        <th class="table-total">Taxable Amount11 </th>
                         <th class="table-total">VAT % </th>
                         <th class="table-total">VAT Amount  </th>
                         <th class="table-total">Gross Amount  </th>
@@ -6397,7 +6428,7 @@ export class InvoiceService {
                 
 
             <div class="total-row">
-                Total due <b>${total_due.toFixed(3)}</b> by <b>${moment(data.due_date).format('Do MMMM YYYY')}</b>
+                Total due <b>${ Math.abs(total_due).toFixed(2)}</b> by <b>${moment(data.due_date).format('Do MMMM YYYY')}</b>
             </div>
         </div>
 
@@ -6525,14 +6556,15 @@ export class InvoiceService {
                             ${data_sharing}
                             <tr>
                                 <td class="sub-total-row" colspan="6">SUB TOTAL</td>
-                                <td class="table-total">${dataSharingItem?.sub_total ?? 0}</td>
+                                <td class="table-total">${dataSharingItem?.category_total ?? 0}</td>
                             </tr>
                             
                         </tbody>
                     </table>
                 </div>
 
-                <div class="section">
+                
+                <div class="section" style = "padding-bottom:0px !important; margin-bottom:0px !important;">
                     <div class="section-title">
                         <span>Service Fee</span>
                         
@@ -6542,8 +6574,8 @@ export class InvoiceService {
                         <thead>
                             <tr>
                                 <th>Description </th>
-                                <th class="table-total">Vol</th>
-                                <th class="table-total">Unit Price</th>
+                                <th class="table-total">Amount Collected</th>
+                                <th class="table-total">Collection %</th>
                                 <th class="table-total">Taxable Amount </th>
                                 <th class="table-total">VAT % </th>
                                 <th class="table-total">VAT Amount  </th>
@@ -6561,7 +6593,7 @@ export class InvoiceService {
                     
                 </div>
 
-                <div class="invoice-total">
+                <div class="invoice-total" style = "padding-top:0px !important; margin-top:0px !important;">
                     <span class="invoice-total-label">Invoice Total</span>
                     <span class="invoice-total-amount"> AED ${data?.invoice_total ?? 0}</span>
                 </div>
@@ -6570,11 +6602,7 @@ export class InvoiceService {
             </div>
         </div>
 
-
-
         ${collection_memo}
-
-
 
     </div>
 </body>
@@ -6781,7 +6809,7 @@ export class InvoiceService {
             for (const item of tpp_data.collection_memo_subitem || []) {
                 revenue_data += `
                 <tr>
-                    <td>${item.label} ${item?.capped === true ? '**' : ''}</td>
+                    <td>${item.label} ${item?.brokerage === true ? ' (Debit)' : ''}</td>
                     <td class="table-total">${item.quantity}</td>
                     <td class="table-total">${item.unit_price}</td>
                     <td class="table-total">${item.total?.toFixed(2)}</td>
@@ -6791,7 +6819,7 @@ export class InvoiceService {
             revenue_data += `
                 <tr class="sub-total">
                 <td colspan="3">Sub Total</td>
-                <td class="table-total">${tpp_data?.full_total.toFixed(2)}</td>
+                <td class="table-total">${Math.abs(tpp_data?.full_total).toFixed(2)}</td>
                 </tr>`;
         }
 
@@ -6865,6 +6893,7 @@ export class InvoiceService {
             border: 1px solid #000046;
             padding: 8px;
             text-align: left;
+            color: #1b194f;
         }
 
         th {
@@ -6943,7 +6972,7 @@ export class InvoiceService {
                 <h3>Nebras Collection Services</h3>
                 <p style="color: #1b194f;">Fee Statement 001<br>${moment(data.createdAt).format('DD MMMM YYYY')} </p>
                 <p class="lif-details"><br>${data.lfi_name}<br>LFI ID:${data.lfi_id}</p>
-                <p class="lif-details">${data?.lfi_details?.addressLine_2}</p>
+                <p class="lif-details">${data?.lfi_details?.addressLine_2 || ''}</p>
             </div>
 
         </div>
@@ -6973,12 +7002,12 @@ export class InvoiceService {
                 </tr>
                 <tr class="sub-total">
                     <td class="" colspan="4">Grand Total</td>
-                    <td class="table-total">${grand_total?.toFixed(2)}</td>
+                    <td class="table-total">${Math.abs(grand_total)?.toFixed(2)}</td>
                 </tr>
             </tbody>
         </table>
 
-        <p style=" padding-top: 20px; color: #1b194f;">
+        <p style=" padding-top: 5px; color: #1b194f;  font-size: 14px; font-style: italic;  white-space: nowrap; /* keep in one line */">
 
             Note: The Grand Total is Net adjusted amount against commission amount.
         </p>
