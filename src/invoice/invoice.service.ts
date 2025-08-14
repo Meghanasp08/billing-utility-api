@@ -110,6 +110,7 @@ export class InvoiceService {
         const bulkLargeCorporatefee = globalConfiData.find(item => item.key === "bulkLargeCorporatefee")?.value ?? 0;
         const dataLargeCorporateMdp = globalConfiData.find(item => item.key === "dataLargeCorporateMdp")?.value ?? 0;
         const dataServiceFeePercentage = globalConfiData.find(item => item.key === "serviceFeePercentage")?.value ?? 0;
+        const nonLargeValueCapMerchant = globalConfiData.find(item => item.key === "nonLargeValueCapMerchant")?.value ?? 0;
 
         const vatPercent = vat?.value ?? 5
         const vatDecimal = vatPercent / 100;
@@ -132,6 +133,7 @@ export class InvoiceService {
                             "chargeable": true,
                             "success": true,
                             "duplicate": false,
+                            successfullQuote: false,
                             $expr: {
                                 $and: [
                                     {
@@ -565,6 +567,7 @@ export class InvoiceService {
                             lfiChargable: true,
                             success: true,
                             duplicate: false,
+                            successfullQuote: false,
                             $expr: {
                                 $and: [
                                     {
@@ -594,6 +597,31 @@ export class InvoiceService {
                             label: {
                                 $switch: {
                                     branches: [
+                                        // {
+                                        //     case: {
+                                        //         $and: [
+                                        //             {
+                                        //                 $in: [
+                                        //                     "$group",
+                                        //                     [
+                                        //                         "payment-bulk",
+                                        //                         "payment-non-bulk"
+                                        //                     ]
+                                        //                 ]
+                                        //             },
+                                        //             {
+                                        //                 $eq: ["$type", "merchant"]
+                                        //             },
+                                        //             {
+                                        //                 $ne: [
+                                        //                     "$raw_api_log_data.payment_type",
+                                        //                     "LargeValueCollection"
+                                        //                 ]
+                                        //             }
+                                        //         ]
+                                        //     },
+                                        //     then: "Merchant Collection"   //-- nonLargeValueMerchantBps/10000
+                                        // },
                                         {
                                             case: {
                                                 $and: [
@@ -610,6 +638,9 @@ export class InvoiceService {
                                                         $eq: ["$type", "merchant"]
                                                     },
                                                     {
+                                                        $eq: ["$isCapped", false]
+                                                    },
+                                                    {
                                                         $ne: [
                                                             "$raw_api_log_data.payment_type",
                                                             "LargeValueCollection"
@@ -617,7 +648,35 @@ export class InvoiceService {
                                                     }
                                                 ]
                                             },
-                                            then: "Merchant Collection"   //-- nonLargeValueMerchantBps/10000
+                                            then: "Merchant Collection Non-Capped" //-- nonLargeValueMerchantBps/10000
+                                        },
+                                        {
+                                            case: {
+                                                $and: [
+                                                    {
+                                                        $in: [
+                                                            "$group",
+                                                            [
+                                                                "payment-bulk",
+                                                                "payment-non-bulk"
+                                                            ]
+                                                        ]
+                                                    },
+                                                    {
+                                                        $eq: ["$type", "merchant"]
+                                                    },
+                                                    {
+                                                        $eq: ["$isCapped", true]
+                                                    },
+                                                    {
+                                                        $ne: [
+                                                            "$raw_api_log_data.payment_type",
+                                                            "LargeValueCollection"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            then: "Merchant Collection Capped" //-- nonLargeValueMerchantBps/10000
                                         },
                                         {
                                             case: {
@@ -741,6 +800,9 @@ export class InvoiceService {
                             quantity: {
                                 $sum: "$volume"
                             },
+                            count: {
+                                $sum: 1
+                            },
                             unit_price: {
                                 $first: "$unit_price"
                             },
@@ -749,6 +811,9 @@ export class InvoiceService {
                             },
                             capped: {
                                 $max: "$isCapped"
+                            },
+                            cappedAmount: {
+                                $first: "$cappedAt"
                             }
                         }
                     },
@@ -763,9 +828,22 @@ export class InvoiceService {
                             labels: {
                                 $push: {
                                     label: "$_id.label",
-                                    quantity: "$quantity",
+                                    // quantity: "$quantity",
+                                    quantity: {
+                                        $cond: {
+                                            if: { $eq: ["$_id.label", "Merchant Collection Capped"] },
+                                            then: "$count",
+                                            else: "$quantity"
+                                        }
+                                    },
                                     unit_price: {
-                                        $round: ["$unit_price", 4]
+                                        $cond: {
+                                            if: { $eq: ["$_id.label", "Merchant Collection Capped"] },
+                                            then: "$cappedAmount",
+                                            else: {
+                                                $round: ["$unit_price", 4]
+                                            },
+                                        }
                                     },
                                     total: {
                                         $round: ["$total", 2]
@@ -792,7 +870,8 @@ export class InvoiceService {
                             labels: {
                                 $map: {
                                     input: [
-                                        "Merchant Collection",
+                                        "Merchant Collection Capped",
+                                        "Merchant Collection Non-Capped",
                                         "Peer-to-Peer",
                                         "Me-to-Me Transfer",
                                         "Large value collection",
@@ -818,7 +897,8 @@ export class InvoiceService {
                                                 defaultUnitPrice: {
                                                     $switch: {
                                                         branches: [
-                                                            { case: { $eq: ["$$expectedLabel", "Merchant Collection"] }, then: nonLargeValueMerchantBps },
+                                                            { case: { $eq: ["$$expectedLabel", "Merchant Collection Capped"] }, then: nonLargeValueCapMerchant },
+                                                            { case: { $eq: ["$$expectedLabel", "Merchant Collection Non-Capped"] }, then: nonLargeValueMerchantBps },
                                                             { case: { $eq: ["$$expectedLabel", "Peer-to-Peer"] }, then: paymentLargeValueFeePeer },
                                                             { case: { $eq: ["$$expectedLabel", "Me-to-Me Transfer"] }, then: paymentFeeMe2me },
                                                             { case: { $eq: ["$$expectedLabel", "Large value collection"] }, then: paymentLargeValueFee },
@@ -832,7 +912,8 @@ export class InvoiceService {
                                                 labelKey: {
                                                     $switch: {
                                                         branches: [
-                                                            { case: { $eq: ["$$expectedLabel", "Merchant Collection"] }, then: "merchant_collection" },
+                                                            { case: { $eq: ["$$expectedLabel", "Merchant Collection Capped"] }, then: "merchant_collection_capped" },
+                                                            { case: { $eq: ["$$expectedLabel", "Merchant Collection Non-Capped"] }, then: "merchant_collection_non_capped" },
                                                             { case: { $eq: ["$$expectedLabel", "Peer-to-Peer"] }, then: "peer_to_peer" },
                                                             { case: { $eq: ["$$expectedLabel", "Me-to-Me Transfer"] }, then: "me_to_me_transfer" },
                                                             { case: { $eq: ["$$expectedLabel", "Large value collection"] }, then: "large_value_collection" },
@@ -1390,10 +1471,11 @@ export class InvoiceService {
                 resultMap.set(item._id, { ...item });
             }
         });
-
         // Step 2: Now calculate full_total after merge
         resultMap.forEach((merged, id) => {
-            merged.full_total = (merged.full_total_data || 0) - (merged.full_total_commission || 0);
+            const totalData = Number(merged.full_total_data) || 0;
+            const totalCommission = Number(merged.full_total_commission) || 0;
+            merged.full_total = Math.round((totalData - totalCommission) * 100) / 100;
             resultMap.set(id, merged);
         });
 
@@ -2328,6 +2410,11 @@ export class InvoiceService {
             ) : undefined
 
         console.log(startDate, endDate);
+
+        const globData = await this.globalModel.findOne({
+            key: 'serviceFeePercentage',
+        })
+        const dataServiceFeePercentage = globData?.value || 0;
         const result = await this.logsModel.aggregate(
             [
                 {
@@ -2336,6 +2423,7 @@ export class InvoiceService {
                         "chargeable": true,
                         "success": true,
                         "duplicate": false,
+                        "successfullQuote": false,
                         "apiHubVolume": { $gt: 0 },
                         $and: [
                             startDate && endDate
@@ -2633,7 +2721,7 @@ export class InvoiceService {
                 }
             ]
         );
-        const result_of_lfi = await this.logsModel.aggregate(
+        const result_of_lfi_data = await this.logsModel.aggregate(
             [
                 {
                     '$match': {
@@ -2641,6 +2729,7 @@ export class InvoiceService {
                         "lfiChargable": true,
                         "success": true,
                         "duplicate": false,
+                        "successfullQuote": false,
                         "volume": { $gt: 0 },
                         $and: [
                             startDate && endDate
@@ -2674,6 +2763,9 @@ export class InvoiceService {
                                                     $eq: ["$type", "merchant"]
                                                 },
                                                 {
+                                                    $eq: ["$isCapped", true]
+                                                },
+                                                {
                                                     $ne: [
                                                         "$raw_api_log_data.payment_type",
                                                         "LargeValueCollection"
@@ -2681,7 +2773,35 @@ export class InvoiceService {
                                                 }
                                             ]
                                         },
-                                        then: "Merchant Collection"
+                                        then: "Merchant Collection Capped"
+                                    },
+                                    {
+                                        case: {
+                                            $and: [
+                                                {
+                                                    $in: [
+                                                        "$group",
+                                                        [
+                                                            "payment-bulk",
+                                                            "payment-non-bulk"
+                                                        ]
+                                                    ]
+                                                },
+                                                {
+                                                    $eq: ["$type", "merchant"]
+                                                },
+                                                {
+                                                    $eq: ["$isCapped", false]
+                                                },
+                                                {
+                                                    $ne: [
+                                                        "$raw_api_log_data.payment_type",
+                                                        "LargeValueCollection"
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        then: "Merchant Collection Non-Capped"
                                     },
                                     {
                                         case: {
@@ -2805,6 +2925,9 @@ export class InvoiceService {
                         quantity: {
                             $sum: "$volume"
                         },
+                        count: {
+                            $sum: 1
+                        },
                         unit_price: {
                             $first: "$unit_price"
                         },
@@ -2813,6 +2936,9 @@ export class InvoiceService {
                         },
                         capped: {
                             $max: "$isCapped"
+                        },
+                        cappedAmount: {
+                            $first: "$cappedAt"
                         }
                     }
                 },
@@ -2822,9 +2948,25 @@ export class InvoiceService {
                         labels: {
                             $push: {
                                 label: "$_id.label",
-                                quantity: "$quantity",
+                                // quantity: "$quantity",
+                                quantity: {
+                                    $cond: {
+                                        if: { $eq: ["$_id.label", "Merchant Collection Capped"] },
+                                        then: "$count",
+                                        else: "$quantity"
+                                    }
+                                },
+                                // unit_price: {
+                                //     $round: ["$unit_price", 4]
+                                // },
                                 unit_price: {
-                                    $round: ["$unit_price", 4]
+                                    $cond: {
+                                        if: { $eq: ["$_id.label", "Merchant Collection Capped"] },
+                                        then: "$cappedAmount",
+                                        else: {
+                                            $round: ["$unit_price", 4]
+                                        },
+                                    }
                                 },
                                 total: {
                                     $round: ["$total", 2]
@@ -2852,7 +2994,7 @@ export class InvoiceService {
                     }
                 }, {
                     '$addFields': {
-                        'full_total': {
+                        'full_total_data': {
                             '$round': [
                                 {
                                     '$sum': '$labels.total'
@@ -2874,7 +3016,8 @@ export class InvoiceService {
                                             key: {
                                                 $switch: {
                                                     branches: [
-                                                        { case: { $eq: ["$$labelItem.label", "Merchant Collection"] }, then: "merchant_collection" },
+                                                        { case: { $eq: ["$$labelItem.label", "Merchant Collection Capped"] }, then: "merchant_collection_capped" },
+                                                        { case: { $eq: ["$$labelItem.label", "Merchant Collection Non-Capped"] }, then: "merchant_collection_non_capped" },
                                                         { case: { $eq: ["$$labelItem.label", "Peer-to-Peer"] }, then: "peer_to_peer" },
                                                         { case: { $eq: ["$$labelItem.label", "Me-to-Me Transfer"] }, then: "me_to_me_transfer" },
                                                         { case: { $eq: ["$$labelItem.label", "Large Value Collection"] }, then: "large_value_collection" },
@@ -2933,34 +3076,269 @@ export class InvoiceService {
                 // }
             ]
         )
-        // const serviceFee = await this.logsModel.aggregate([
-        //     {
-        //         $match: {
-        //             "raw_api_log_data.tpp_id":
-        //                 tpp_id,
-        //             chargeable: true,
-        //             success: true,
-        //             duplicate: false,
-        //             successfullQuote: true
-        //         }
-        //     },
-        //     {
-        //         $group: {
-        //             _id: {
-        //                 category: "$api_category",
-        //             },
-        //             quantity: {
-        //                 $sum: 1
-        //             },
-        //             unit_price: {
-        //                 $first: "$brokerage_fee"
-        //             },
-        //             total: {
-        //                 $sum: "$brokerage_fee"
-        //             }
-        //         }
-        //     }
-        // ])
+
+        const serviceFee = await this.logsModel.aggregate([
+            {
+                '$match': {
+                    'raw_api_log_data.tpp_id': tpp_id,
+                    "chargeable": true,
+                    "success": true,
+                    "duplicate": false,
+                    "successfullQuote": true,
+                    // "apiHubVolume": { $gt: 0 },
+                    $and: [
+                        startDate && endDate
+                            ? {
+                                'raw_api_log_data.timestamp': {
+                                    $gte: startDate,
+                                    $lte: endDate
+                                }
+                            }
+                            : {}
+                    ]
+                }
+            },
+            // {
+            //     $group: {
+            //         _id: {
+            //             category: "$api_category",
+            //             description: "service_fee"
+            //         },
+            //         quantity: {
+            //             $sum: 1
+            //         },
+            //         unit_price: {
+            //             $first: "$brokerage_fee"
+            //         },
+            //         total: {
+            //             $sum: "$brokerage_fee"
+            //         }
+            //     }
+            // },
+            {
+                $group: {
+                    _id: {
+                        category: "$api_category",
+                        description: "service_fee"
+                    },
+                    quantity: {
+                        $sum: "$brokerage_fee"
+                    },
+                    unit_price: { $first: dataServiceFeePercentage },
+                    total: {
+                        $sum: {
+                            $multiply: ["$brokerage_fee", Number(dataServiceFeePercentage) / 100]
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    description: {
+                        $switch: {
+                            branches: [
+                                {
+                                    case: { $eq: ["$_id.category", "Insurance Quote Sharing"] },
+                                    then: "Insurance Brokerage Collection"
+                                },
+                                {
+                                    case: { $eq: ["$_id.category", "FX Quotes"] },
+                                    then: "FX Brokerage Collection"
+                                }
+                            ],
+                            default: "$_id.category"
+                        }
+                    },
+                    key: {
+                        $toLower: {
+                            $replaceAll: {
+                                input: "$_id.category",
+                                find: " ",
+                                replacement: "_"
+                            }
+                        }
+                    },
+                    quantity: 1,
+                    unit_price: 1,
+                    total: {
+                        $round: ["$total", 2]
+                    },
+                    // vat_amount: {
+                    //     $round: [
+                    //         { $multiply: ["$total", vatDecimal] }, // Assuming 5% VAT
+                    //         2
+                    //     ]
+                    // },
+                    // full_total: {
+                    //     $round: [
+                    //         { $add: ["$total", { $multiply: ["$total", vatDecimal] }] },
+                    //         2
+                    //     ]
+                    // }
+                }
+            }
+        ])
+
+        const commisionData = await this.logsModel.aggregate([{
+            '$match': {
+                'raw_api_log_data.tpp_id': tpp_id,
+                "chargeable": true,
+                "success": true,
+                "duplicate": false,
+                "successfullQuote": true,
+                // "volume": { $gt: 0 },
+                $and: [
+                    startDate && endDate
+                        ? {
+                            'raw_api_log_data.timestamp': {
+                                $gte: new Date(startDate),
+                                $lte: new Date(endDate)
+                            }
+                        }
+                        : {}
+                ]
+            }
+        },
+
+        {
+            $group: {
+                _id: {
+                    lfi_id: "$raw_api_log_data.lfi_id",
+                    label: "$api_category"
+                },
+                quantity: {
+                    $sum: 1
+                },
+                unit_price: {
+                    $first: "$brokerage_fee"
+                },
+                total: {
+                    $sum: "$brokerage_fee"
+                }
+            }
+        },
+        {
+            $project: {
+                _id: 1,
+                description: {
+                    $switch: {
+                        branches: [
+                            {
+                                case: { $eq: ["$_id.label", "Insurance Quote Sharing"] },
+                                then: "Insurance Brokerage Collection"
+                            },
+                            {
+                                case: { $eq: ["$_id.label", "FX Quotes"] },
+                                then: "FX Brokerage Collection"
+                            }
+                        ],
+                        default: "$_id.label"
+                    }
+                },
+                quantity: 1,
+                unit_price: 1,
+                total: {
+                    $round: ["$total", 2]
+                },
+                // vat_amount: {
+                //     $round: [
+                //         { $multiply: ["$total", vatDecimal] }, // Assuming 5% VAT
+                //         2
+                //     ]
+                // },
+                // full_total: {
+                //     $round: [
+                //         { $add: ["$total", { $multiply: ["$total", vatDecimal] }] },
+                //         2
+                //     ]
+                // }
+            }
+        },
+        {
+            $addFields: {
+                key: {
+                    $toLower: {
+                        $replaceAll: {
+                            input: "$description",
+                            find: " ",
+                            replacement: "_"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            $match: {
+                total: {
+                    $ne: 0
+                }
+            }
+        },
+        {
+            $group: {
+                _id: "$_id.lfi_id",
+                commissions: {
+                    $push: {
+                        key: "$key",
+                        brokerage: true,
+                        label: "$description",
+                        quantity: "$quantity",
+                        unit_price: {
+                            $round: ["$unit_price", 4]
+                        },
+                        total: {
+                            $round: ["$total", 2]
+                        }
+                    }
+                }
+            }
+        },
+        {
+            $lookup: {
+                from: "lfi_data",
+                localField: "_id",
+                foreignField: "lfi_id",
+                as: "lfi_data"
+            }
+        },
+        {
+            $unwind: {
+                path: "$lfi_data"
+            }
+        },
+
+        {
+            $addFields: {
+                full_total_commission: {
+                    $round: [
+                        {
+                            $sum: {
+                                $map: {
+                                    input: "$commissions",
+                                    as: "item",
+                                    in: "$$item.total"
+                                }
+                            }
+                        },
+                        2
+                    ]
+                },
+                lfi_name: "$lfi_data.lfi_name"
+            }
+        },
+        ])
+
+        if (serviceFee.length > 0) {
+            const category_total = serviceFee.reduce((sum, item) => sum + item.total, 0);
+
+            result.push({
+                items: serviceFee,
+                category_total: Number(category_total.toFixed(2)),
+                category: "service_fee"
+            });
+        }
+        const result_of_lfi = await this.lfiCommissionMerge(result_of_lfi_data, commisionData);
         let invoice_total = result.reduce((sum, item) => sum + item.category_total, 0);
         let lfi_total = result_of_lfi.reduce((sum, item) => sum + item.full_total, 0);
 
@@ -3610,26 +3988,528 @@ export class InvoiceService {
         const vatPercent = vat_details?.value ?? 5
         const vatDecimal = vatPercent / 100;
 
+        // let aggregation: any = [
+        //     {
+        //         '$match': {
+        //             'raw_api_log_data.lfi_id': lfi_id,
+        //             'lfiChargable': true,
+        //             "success": true,
+        //             "duplicate": false,
+        //             "successfullQuote": false,
+        //             "volume": { $gt: 0 },
+        //             $and: [
+        //                 startDate && endDate
+        //                     ? {
+        //                         'raw_api_log_data.timestamp': {
+        //                             $gte: startDate,
+        //                             $lte: endDate
+        //                         }
+        //                     }
+        //                     : {}
+        //             ]
+        //         }
+        //     }, {
+        //         $addFields: {
+        //             label: {
+        //                 $switch: {
+        //                     branches: [
+        //                         {
+        //                             case: {
+        //                                 $and: [
+        //                                     {
+        //                                         $in: [
+        //                                             "$group",
+        //                                             [
+        //                                                 "payment-bulk",
+        //                                                 "payment-non-bulk"
+        //                                             ]
+        //                                         ]
+        //                                     },
+        //                                     {
+        //                                         $eq: ["$type", "merchant"]
+        //                                     },
+        //                                     {
+        //                                         $eq: ["$isCapped", true]
+        //                                     },
+        //                                     {
+        //                                         $ne: [
+        //                                             "$raw_api_log_data.payment_type",
+        //                                             "LargeValueCollection"
+        //                                         ]
+        //                                     }
+        //                                 ]
+        //                             },
+        //                             then: "Merchant Collection Capped"
+        //                         },
+        //                         {
+        //                             case: {
+        //                                 $and: [
+        //                                     {
+        //                                         $in: [
+        //                                             "$group",
+        //                                             [
+        //                                                 "payment-bulk",
+        //                                                 "payment-non-bulk"
+        //                                             ]
+        //                                         ]
+        //                                     },
+        //                                     {
+        //                                         $eq: ["$type", "merchant"]
+        //                                     },
+        //                                     {
+        //                                         $eq: ["$isCapped", false]
+        //                                     },
+        //                                     {
+        //                                         $ne: [
+        //                                             "$raw_api_log_data.payment_type",
+        //                                             "LargeValueCollection"
+        //                                         ]
+        //                                     }
+        //                                 ]
+        //                             },
+        //                             then: "Merchant Collection Non-Capped"
+        //                         },
+        //                         {
+        //                             case: {
+        //                                 $and: [
+        //                                     {
+        //                                         $in: [
+        //                                             "$group",
+        //                                             [
+        //                                                 "payment-bulk",
+        //                                                 "payment-non-bulk"
+        //                                             ]
+        //                                         ]
+        //                                     },
+        //                                     {
+        //                                         $eq: ["$type", "peer-2-peer"]
+        //                                     },
+        //                                     {
+        //                                         $ne: [
+        //                                             "$raw_api_log_data.payment_type",
+        //                                             "LargeValueCollection"
+        //                                         ]
+        //                                     }
+        //                                 ]
+        //                             },
+        //                             then: "Peer-to-Peer"
+        //                         },
+        //                         {
+        //                             case: {
+        //                                 $and: [
+        //                                     {
+        //                                         $in: [
+        //                                             "$group",
+        //                                             [
+        //                                                 "payment-bulk",
+        //                                                 "payment-non-bulk"
+        //                                             ]
+        //                                         ]
+        //                                     },
+        //                                     {
+        //                                         $eq: ["$type", "me-2-me"]
+        //                                     },
+        //                                     {
+        //                                         $ne: [
+        //                                             "$raw_api_log_data.payment_type",
+        //                                             "LargeValueCollection"
+        //                                         ]
+        //                                     }
+        //                                 ]
+        //                             },
+        //                             then: "Me-to-Me Transfer"
+        //                         },
+        //                         {
+        //                             case: {
+        //                                 $and: [
+        //                                     {
+        //                                         $in: [
+        //                                             "$group",
+        //                                             [
+        //                                                 "payment-bulk",
+        //                                                 "payment-non-bulk"
+        //                                             ]
+        //                                         ]
+        //                                     },
+        //                                     {
+        //                                         $eq: [
+        //                                             "$raw_api_log_data.payment_type",
+        //                                             "LargeValueCollection"
+        //                                         ]
+        //                                     }
+        //                                 ]
+        //                             },
+        //                             then: "Large Value Collection"
+        //                         },
+        //                         {
+        //                             case: {
+        //                                 $and: [
+        //                                     {
+        //                                         $eq: [
+        //                                             "$group",
+        //                                             "payment-bulk"
+        //                                         ]
+        //                                     },
+        //                                     {
+        //                                         $eq: ["$type", "corporate"]
+        //                                     }
+        //                                 ]
+        //                             },
+        //                             then: "Corporate Payments"
+        //                         },
+        //                         {
+        //                             case: {
+        //                                 $and: [
+        //                                     {
+        //                                         $eq: ["$group", "data"]
+        //                                     },
+        //                                     {
+        //                                         $eq: ["$type", "corporate"]
+        //                                     }
+        //                                 ]
+        //                             },
+        //                             then: "Corporate Treasury Data"
+        //                         },
+        //                         {
+        //                             case: {
+        //                                 $eq: ["$group", "data"]
+        //                             },
+        //                             then: "Customer Data"
+        //                         }
+        //                     ],
+        //                     default: "Others"
+        //                 }
+        //             }
+        //         }
+        //     }, {
+        //         '$group': {
+        //             '_id': {
+        //                 'tpp_id': '$raw_api_log_data.tpp_id',
+        //                 'label': '$label'
+        //             },
+        //             quantity: {
+        //                 $sum: "$volume"
+        //             },
+        //             count: {
+        //                 $sum: 1
+        //             },
+        //             unit_price: {
+        //                 $first: "$unit_price"
+        //             },
+        //             total: {
+        //                 $sum: "$applicableFee"
+        //             },
+        //             capped: {
+        //                 $max: "$isCapped"
+        //             },
+        //             cappedAmount: {
+        //                 $first: "$cappedAt"
+        //             }
+        //         }
+        //     }, {
+        //         '$group': {
+        //             '_id': '$_id.tpp_id',
+        //             labels: {
+        //                 $push: {
+        //                     label: "$_id.label",
+        //                     quantity: {
+        //                         $cond: {
+        //                             if: { $eq: ["$_id.label", "Merchant Collection Capped"] },
+        //                             then: "$count",
+        //                             else: "$quantity"
+        //                         }
+        //                     },
+        //                     unit_price: {
+        //                         $cond: {
+        //                             if: { $eq: ["$_id.label", "Merchant Collection Capped"] },
+        //                             then: "$cappedAmount",
+        //                             else: {
+        //                                 $round: ["$unit_price", 4]
+        //                             },
+        //                         }
+        //                     },
+        //                     total: {
+        //                         $round: ["$total", 2]
+        //                     },
+        //                     capped: "$capped",
+        //                 }
+        //             }
+        //         }
+        //     },
+
+        //     {
+        //         '$addFields': {
+        //             'labels': {
+        //                 '$filter': {
+        //                     'input': '$labels',
+        //                     'as': 'labelItem',
+        //                     'cond': {
+        //                         '$ne': [
+        //                             '$$labelItem.label', 'Others'
+        //                         ]
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }, {
+        //         '$sort': {
+        //             'tpp_id': 1,
+        //             'label': 1
+        //         }
+        //     }, {
+        //         '$lookup': {
+        //             'from': 'tpp_data',
+        //             'localField': '_id',
+        //             'foreignField': 'tpp_id',
+        //             'as': 'tpp_details'
+        //         }
+        //     }, {
+        //         '$unwind': {
+        //             'path': '$tpp_details',
+        //             'preserveNullAndEmptyArrays': true
+        //         }
+        //     },
+        //     {
+        //         $addFields: {
+        //             labels: {
+        //                 $map: {
+        //                     input: "$labels",
+        //                     as: "labelItem",
+        //                     in: {
+        //                         $mergeObjects: [
+        //                             "$$labelItem",
+        //                             {
+        //                                 key: {
+        //                                     $switch: {
+        //                                         branches: [
+        //                                             { case: { $eq: ["$$labelItem.label", "Merchant Collection Capped"] }, then: "merchant_collection_capped" },
+        //                                             { case: { $eq: ["$$labelItem.label", "Merchant Collection Non-Capped"] }, then: "merchant_collection_non_capped" },
+        //                                             { case: { $eq: ["$$labelItem.label", "Peer-to-Peer"] }, then: "peer_to_peer" },
+        //                                             { case: { $eq: ["$$labelItem.label", "Me-to-Me Transfer"] }, then: "me_to_me_transfer" },
+        //                                             { case: { $eq: ["$$labelItem.label", "Large Value Collection"] }, then: "large_value_collection" },
+        //                                             { case: { $eq: ["$$labelItem.label", "Corporate Payments"] }, then: "corporate_payments" },
+        //                                             { case: { $eq: ["$$labelItem.label", "Corporate Treasury Data"] }, then: "corporate_treasury_data" },
+        //                                             { case: { $eq: ["$$labelItem.label", "Customer Data"] }, then: "customer_data" }
+        //                                         ],
+        //                                         default: null
+        //                                     }
+        //                                 }
+        //                             }
+        //                         ]
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     },
+
+        //     {
+        //         '$addFields': {
+        //             'full_total_data': {
+        //                 '$round': [
+        //                     {
+        //                         '$sum': '$labels.total'
+        //                     }, 2
+        //                 ]
+        //             }
+        //         }
+        //     },
+        //     //  {
+        //     //     '$addFields': {
+        //     //         'vat': {
+        //     //             '$round': [
+        //     //                 {
+        //     //                     '$multiply': [
+        //     //                         '$full_total', vatDecimal
+        //     //                     ]
+        //     //                 }, 4
+        //     //             ]
+        //     //         },
+        //     //         'actual_total': {
+        //     //             '$round': [
+        //     //                 {
+        //     //                     '$add': [
+        //     //                         '$full_total', {
+        //     //                             '$multiply': [
+        //     //                                 '$full_total', vatDecimal
+        //     //                             ]
+        //     //                         }
+        //     //                     ]
+        //     //                 }, 4
+        //     //             ]
+        //     //         }
+        //     //     }
+        //     // }
+
+        //     {
+        //         $lookup: {
+        //             from: "logs",
+        //             localField: "_id",
+        //             foreignField: "raw_api_log_data.tpp_id",
+        //             as: "result",
+        //             pipeline: [
+        //                 {
+        //                     $match: {
+        //                         $expr: {
+        //                             $and: [
+        //                                 {
+        //                                     $eq: ["$chargeable", true]
+        //                                 },
+        //                                 {
+        //                                     $eq: ["$success", true]
+        //                                 },
+        //                                 {
+        //                                     $eq: ["$duplicate", false]
+        //                                 },
+        //                                 {
+        //                                     $eq: ["$successfullQuote", true]
+        //                                 },
+        //                                 {
+        //                                     $eq: [
+        //                                         "$raw_api_log_data.lfi_id",
+        //                                         lfi_id
+        //                                     ]
+        //                                 }
+        //                             ]
+        //                         },
+        //                         $and: [
+        //                             startDate && endDate
+        //                                 ? {
+        //                                     'raw_api_log_data.timestamp': {
+        //                                         $gte: startDate,
+        //                                         $lte: endDate
+        //                                     }
+        //                                 }
+        //                                 : {}
+        //                         ]
+        //                     }
+        //                 },
+        //                 {
+        //                     $group: {
+        //                         _id: {
+        //                             tpp_id: "$raw_api_log_data.tpp_id",
+        //                             label: {
+        //                                 $switch: {
+        //                                     branches: [
+        //                                         {
+        //                                             case: {
+        //                                                 $eq: [
+        //                                                     "$api_category",
+        //                                                     "Insurance Quote Sharing"
+        //                                                 ]
+        //                                             },
+        //                                             then: "Insurance Brokerage Collection"
+        //                                         },
+        //                                         {
+        //                                             case: {
+        //                                                 $eq: [
+        //                                                     "$api_category",
+        //                                                     "FX Quotes"
+        //                                                 ]
+        //                                             },
+        //                                             then: "FX Brokerage Collection"
+        //                                         }
+        //                                     ],
+        //                                     default: "$api_category"
+        //                                 }
+        //                             }
+        //                         },
+        //                         quantity: {
+        //                             $sum: 1
+        //                         },
+        //                         unit_price: {
+        //                             $first: "$brokerage_fee"
+        //                         },
+        //                         total: {
+        //                             $sum: "$brokerage_fee"
+        //                         },
+        //                         capped: {
+        //                             $max: "$isCapped"
+        //                         }
+        //                     }
+        //                 },
+        //                 {
+        //                     $project: {
+        //                         _id: 0,
+        //                         label: "$_id.label",
+        //                         quantity: 1,
+        //                         unit_price: 1,
+        //                         total: 1,
+        //                         capped: 1,
+        //                         brokerage: { $literal: true }
+        //                     }
+        //                 }
+        //             ]
+        //         }
+        //     },
+        //     {
+        //         $addFields: {
+        //             labels_total_sum: {
+        //                 $sum: {
+        //                     $map: {
+        //                         input: "$labels",
+        //                         as: "lbl",
+        //                         in: "$$lbl.total"
+        //                     }
+        //                 }
+        //             },
+        //             result_total_sum: {
+        //                 $sum: {
+        //                     $map: {
+        //                         input: "$result",
+        //                         as: "res",
+        //                         in: "$$res.total"
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     },
+        //     // Step 2: subtract totals
+        //     {
+        //         $addFields: {
+        //             full_total: {
+        //                 $round: [
+        //                     { $subtract: ["$labels_total_sum", "$result_total_sum"] },
+        //                     2
+        //                 ]
+        //             }
+        //         }
+        //     },
+        //     // Step 3: merge arrays
+        //     {
+        //         $addFields: {
+        //             labels: { $concatArrays: ["$labels", "$result"] }
+        //         }
+        //     },
+        //     // Step 4: cleanup temporary fields
+        //     {
+        //         $project: {
+        //             result: 0,
+        //             labels_total_sum: 0,
+        //             result_total_sum: 0
+        //         }
+        //     }
+        // ]
+
         let aggregation: any = [
             {
-                '$match': {
-                    'raw_api_log_data.lfi_id': lfi_id,
-                    'lfiChargable': true,
-                    "success": true,
-                    "duplicate": false,
-                    "volume": { $gt: 0 },
-                    $and: [
-                        startDate && endDate
-                            ? {
-                                'raw_api_log_data.timestamp': {
-                                    $gte: startDate,
-                                    $lte: endDate
-                                }
-                            }
-                            : {}
-                    ]
+                $match: {
+                    "raw_api_log_data.lfi_id": lfi_id,
+                    success: true,
+                    duplicate: false,
+
+                    // $and: [
+                    //     startDate && endDate
+                    //         ? {
+                    //             'raw_api_log_data.timestamp': {
+                    //                 $gte: startDate,
+                    //                 $lte: endDate
+                    //             }
+                    //         }
+                    //         : {}
+                    // ]
                 }
-            }, {
+            },
+            {
                 $addFields: {
                     label: {
                         $switch: {
@@ -3650,6 +4530,21 @@ export class InvoiceService {
                                                 $eq: ["$type", "merchant"]
                                             },
                                             {
+                                                $eq: ["$isCapped", true]
+                                            },
+                                            {
+                                                $eq: [
+                                                    "$successfullQuote",
+                                                    false
+                                                ]
+                                            },
+                                            {
+                                                $eq: ["$lfiChargable", true]
+                                            },
+                                            {
+                                                $gt: ["$volume", 0]
+                                            },
+                                            {
                                                 $ne: [
                                                     "$raw_api_log_data.payment_type",
                                                     "LargeValueCollection"
@@ -3657,7 +4552,47 @@ export class InvoiceService {
                                             }
                                         ]
                                     },
-                                    then: "Merchant Collection"
+                                    then: "Merchant Collection Capped"
+                                },
+                                {
+                                    case: {
+                                        $and: [
+                                            {
+                                                $in: [
+                                                    "$group",
+                                                    [
+                                                        "payment-bulk",
+                                                        "payment-non-bulk"
+                                                    ]
+                                                ]
+                                            },
+                                            {
+                                                $eq: ["$type", "merchant"]
+                                            },
+                                            {
+                                                $eq: ["$isCapped", false]
+                                            },
+                                            {
+                                                $eq: [
+                                                    "$successfullQuote",
+                                                    false
+                                                ]
+                                            },
+                                            {
+                                                $eq: ["$lfiChargable", true]
+                                            },
+                                            {
+                                                $gt: ["$volume", 0]
+                                            },
+                                            {
+                                                $ne: [
+                                                    "$raw_api_log_data.payment_type",
+                                                    "LargeValueCollection"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    then: "Merchant Collection Non-Capped"
                                 },
                                 {
                                     case: {
@@ -3673,6 +4608,18 @@ export class InvoiceService {
                                             },
                                             {
                                                 $eq: ["$type", "peer-2-peer"]
+                                            },
+                                            {
+                                                $eq: [
+                                                    "$successfullQuote",
+                                                    false
+                                                ]
+                                            },
+                                            {
+                                                $eq: ["$lfiChargable", true]
+                                            },
+                                            {
+                                                $gt: ["$volume", 0]
                                             },
                                             {
                                                 $ne: [
@@ -3698,6 +4645,18 @@ export class InvoiceService {
                                             },
                                             {
                                                 $eq: ["$type", "me-2-me"]
+                                            },
+                                            {
+                                                $eq: [
+                                                    "$successfullQuote",
+                                                    false
+                                                ]
+                                            },
+                                            {
+                                                $eq: ["$lfiChargable", true]
+                                            },
+                                            {
+                                                $gt: ["$volume", 0]
                                             },
                                             {
                                                 $ne: [
@@ -3726,6 +4685,18 @@ export class InvoiceService {
                                                     "$raw_api_log_data.payment_type",
                                                     "LargeValueCollection"
                                                 ]
+                                            },
+                                            {
+                                                $eq: [
+                                                    "$successfullQuote",
+                                                    false
+                                                ]
+                                            },
+                                            {
+                                                $eq: ["$lfiChargable", true]
+                                            },
+                                            {
+                                                $gt: ["$volume", 0]
                                             }
                                         ]
                                     },
@@ -3742,6 +4713,18 @@ export class InvoiceService {
                                             },
                                             {
                                                 $eq: ["$type", "corporate"]
+                                            },
+                                            {
+                                                $eq: [
+                                                    "$successfullQuote",
+                                                    false
+                                                ]
+                                            },
+                                            {
+                                                $eq: ["$lfiChargable", true]
+                                            },
+                                            {
+                                                $gt: ["$volume", 0]
                                             }
                                         ]
                                     },
@@ -3755,6 +4738,18 @@ export class InvoiceService {
                                             },
                                             {
                                                 $eq: ["$type", "corporate"]
+                                            },
+                                            {
+                                                $eq: [
+                                                    "$successfullQuote",
+                                                    false
+                                                ]
+                                            },
+                                            {
+                                                $eq: ["$lfiChargable", true]
+                                            },
+                                            {
+                                                $gt: ["$volume", 0]
                                             }
                                         ]
                                     },
@@ -3762,83 +4757,220 @@ export class InvoiceService {
                                 },
                                 {
                                     case: {
-                                        $eq: ["$group", "data"]
+                                        $and: [
+                                            {
+                                                $eq: ["$group", "data"]
+                                            },
+                                            {
+                                                $eq: [
+                                                    "$successfullQuote",
+                                                    false
+                                                ]
+                                            },
+                                            {
+                                                $eq: ["$lfiChargable", true]
+                                            },
+                                            {
+                                                $gt: ["$volume", 0]
+                                            }
+                                        ]
                                     },
                                     then: "Customer Data"
+                                },
+                                {
+                                    case: {
+                                        $and: [
+                                            {
+                                                $eq: [
+                                                    "$api_category",
+                                                    "FX Quotes"
+                                                ]
+                                            },
+                                            {
+                                                $eq: [
+                                                    "$successfullQuote",
+                                                    true
+                                                ]
+                                            },
+                                            {
+                                                $eq: ["$chargeable", true]
+                                            }
+                                        ]
+                                    },
+                                    then: "FX Brokerage Collection"
+                                },
+                                {
+                                    case: {
+                                        $and: [
+                                            {
+                                                $eq: [
+                                                    "$api_category",
+                                                    "Insurance Quote Sharing"
+                                                ]
+                                            },
+                                            {
+                                                $eq: [
+                                                    "$successfullQuote",
+                                                    true
+                                                ]
+                                            },
+                                            {
+                                                $eq: ["$chargeable", true]
+                                            }
+                                        ]
+                                    },
+                                    then: "Insurance Brokerage Collection"
                                 }
                             ],
-                            default: "Others"
+                            default: null
                         }
                     }
                 }
-            }, {
-                '$group': {
-                    '_id': {
-                        'tpp_id': '$raw_api_log_data.tpp_id',
-                        'label': '$label'
+            },
+            {
+                $match: {
+                    label: {
+                        $ne: null
+                    }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        tpp_id: "$raw_api_log_data.tpp_id",
+                        label: "$label"
                     },
                     quantity: {
                         $sum: "$volume"
+                    },
+                    count: {
+                        $sum: 1
                     },
                     unit_price: {
                         $first: "$unit_price"
                     },
                     total: {
-                        $sum: "$applicableFee"
+                        $sum: {
+                            $cond: {
+                                if: {
+                                    $in: [
+                                        "$label",
+                                        [
+                                            "Insurance Brokerage Collection",
+                                            "FX Brokerage Collection"
+                                        ]
+                                    ]
+                                },
+                                then: "$brokerage_fee",
+                                else: "$applicableFee"
+                            }
+                        }
                     },
                     capped: {
                         $max: "$isCapped"
-                    }
-                }
-            }, {
-                '$group': {
-                    '_id': '$_id.tpp_id',
-                    labels: {
-                        $push: {
-                            label: "$_id.label",
-                            quantity: "$quantity",
-                            unit_price: {
-                                $round: ["$unit_price", 4]
-                            },
-                            total: {
-                                $round: ["$total", 2]
-                            },
-                            capped: "$capped",
-                        }
-                    }
-                }
-            },
-
-            {
-                '$addFields': {
-                    'labels': {
-                        '$filter': {
-                            'input': '$labels',
-                            'as': 'labelItem',
-                            'cond': {
-                                '$ne': [
-                                    '$$labelItem.label', 'Others'
-                                ]
+                    },
+                    cappedAmount: {
+                        $first: "$cappedAt"
+                    },
+                    brokerage_fee: {
+                        $first: "$brokerage_fee"
+                    },
+                    brokerage: {
+                        $first: {
+                            $cond: {
+                                if: {
+                                    $in: [
+                                        "$label",
+                                        [
+                                            "Insurance Brokerage Collection",
+                                            "FX Brokerage Collection"
+                                        ]
+                                    ]
+                                },
+                                then: true,
+                                else: false
                             }
                         }
                     }
                 }
-            }, {
-                '$sort': {
-                    'tpp_id': 1,
-                    'label': 1
+            },
+            {
+                $group: {
+                    _id: "$_id.tpp_id",
+                    labels: {
+                        $push: {
+                            label: "$_id.label",
+                            quantity: {
+                                $cond: {
+                                    if: {
+                                        $in: [
+                                            "$_id.label",
+                                            [
+                                                "Merchant Collection Capped",
+                                                "Insurance Brokerage Collection",
+                                                "FX Brokerage Collection"
+                                            ]
+                                        ]
+                                    },
+                                    then: "$count",
+                                    else: "$quantity"
+                                }
+                            },
+                            unit_price: {
+                                $cond: {
+                                    if: {
+                                        $eq: [
+                                            "$_id.label",
+                                            "Merchant Collection Capped"
+                                        ]
+                                    },
+                                    then: "$cappedAmount",
+                                    else: {
+                                        $cond: {
+                                            if: {
+                                                $in: [
+                                                    "$_id.label",
+                                                    [
+                                                        "Insurance Brokerage Collection",
+                                                        "FX Brokerage Collection"
+                                                    ]
+                                                ]
+                                            },
+                                            then: "$brokerage_fee",
+                                            else: {
+                                                $round: ["$unit_price", 4]
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            brokerage: "$brokerage",
+                            total: {
+                                $round: ["$total", 2]
+                            },
+                            capped: "$capped"
+                        }
+                    }
                 }
-            }, {
-                '$lookup': {
-                    'from': 'tpp_data',
-                    'localField': '_id',
-                    'foreignField': 'tpp_id',
-                    'as': 'tpp_details'
+            },
+            {
+                $sort: {
+                    tpp_id: 1,
+                    label: 1
                 }
-            }, {
-                '$unwind': {
-                    'path': '$tpp_details',
-                    'preserveNullAndEmptyArrays': true
+            },
+            {
+                $lookup: {
+                    from: "tpp_data",
+                    localField: "_id",
+                    foreignField: "tpp_id",
+                    as: "tpp_details"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$tpp_details",
+                    preserveNullAndEmptyArrays: true
                 }
             },
             {
@@ -3854,13 +4986,96 @@ export class InvoiceService {
                                         key: {
                                             $switch: {
                                                 branches: [
-                                                    { case: { $eq: ["$$labelItem.label", "Merchant Collection"] }, then: "merchant_collection" },
-                                                    { case: { $eq: ["$$labelItem.label", "Peer-to-Peer"] }, then: "peer_to_peer" },
-                                                    { case: { $eq: ["$$labelItem.label", "Me-to-Me Transfer"] }, then: "me_to_me_transfer" },
-                                                    { case: { $eq: ["$$labelItem.label", "Large Value Collection"] }, then: "large_value_collection" },
-                                                    { case: { $eq: ["$$labelItem.label", "Corporate Payments"] }, then: "corporate_payments" },
-                                                    { case: { $eq: ["$$labelItem.label", "Corporate Treasury Data"] }, then: "corporate_treasury_data" },
-                                                    { case: { $eq: ["$$labelItem.label", "Customer Data"] }, then: "customer_data" }
+                                                    {
+                                                        case: {
+                                                            $eq: [
+                                                                "$$labelItem.label",
+                                                                "Merchant Collection Capped"
+                                                            ]
+                                                        },
+                                                        then: "merchant_collection_capped"
+                                                    },
+                                                    {
+                                                        case: {
+                                                            $eq: [
+                                                                "$$labelItem.label",
+                                                                "Merchant Collection Non-Capped"
+                                                            ]
+                                                        },
+                                                        then: "merchant_collection_non_capped"
+                                                    },
+                                                    {
+                                                        case: {
+                                                            $eq: [
+                                                                "$$labelItem.label",
+                                                                "FX Brokerage Collection"
+                                                            ]
+                                                        },
+                                                        then: "fx_brokerage_collection"
+                                                    },
+                                                    {
+                                                        case: {
+                                                            $eq: [
+                                                                "$$labelItem.label",
+                                                                "Insurance Brokerage Collection"
+                                                            ]
+                                                        },
+                                                        then: "insurance_brokerage_collection"
+                                                    },
+                                                    {
+                                                        case: {
+                                                            $eq: [
+                                                                "$$labelItem.label",
+                                                                "Peer-to-Peer"
+                                                            ]
+                                                        },
+                                                        then: "peer_to_peer"
+                                                    },
+                                                    {
+                                                        case: {
+                                                            $eq: [
+                                                                "$$labelItem.label",
+                                                                "Me-to-Me Transfer"
+                                                            ]
+                                                        },
+                                                        then: "me_to_me_transfer"
+                                                    },
+                                                    {
+                                                        case: {
+                                                            $eq: [
+                                                                "$$labelItem.label",
+                                                                "Large Value Collection"
+                                                            ]
+                                                        },
+                                                        then: "large_value_collection"
+                                                    },
+                                                    {
+                                                        case: {
+                                                            $eq: [
+                                                                "$$labelItem.label",
+                                                                "Corporate Payments"
+                                                            ]
+                                                        },
+                                                        then: "corporate_payments"
+                                                    },
+                                                    {
+                                                        case: {
+                                                            $eq: [
+                                                                "$$labelItem.label",
+                                                                "Corporate Treasury Data"
+                                                            ]
+                                                        },
+                                                        then: "corporate_treasury_data"
+                                                    },
+                                                    {
+                                                        case: {
+                                                            $eq: [
+                                                                "$$labelItem.label",
+                                                                "Customer Data"
+                                                            ]
+                                                        },
+                                                        then: "customer_data"
+                                                    }
                                                 ],
                                                 default: null
                                             }
@@ -3872,47 +5087,78 @@ export class InvoiceService {
                     }
                 }
             },
-
             {
-                '$addFields': {
-                    'full_total': {
-                        '$round': [
-                            {
-                                '$sum': '$labels.total'
-                            }, 2
-                        ]
+                $addFields: {
+                    labels: {
+                        $sortArray: {
+                            input: "$labels",
+                            sortBy: { brokerage: 1 }
+                        }
                     }
                 }
             },
-            //  {
-            //     '$addFields': {
-            //         'vat': {
-            //             '$round': [
-            //                 {
-            //                     '$multiply': [
-            //                         '$full_total', vatDecimal
-            //                     ]
-            //                 }, 4
-            //             ]
-            //         },
-            //         'actual_total': {
-            //             '$round': [
-            //                 {
-            //                     '$add': [
-            //                         '$full_total', {
-            //                             '$multiply': [
-            //                                 '$full_total', vatDecimal
-            //                             ]
-            //                         }
-            //                     ]
-            //                 }, 4
-            //             ]
-            //         }
-            //     }
-            // }
+            {
+                $addFields: {
+                    full_total: {
+                        $round: [
+                            {
+                                $let: {
+                                    vars: {
+                                        sums: {
+                                            $reduce: {
+                                                input: "$labels",
+                                                initialValue: {
+                                                    trueTotal: 0,
+                                                    falseTotal: 0
+                                                },
+                                                in: {
+                                                    trueTotal: {
+                                                        $cond: [
+                                                            "$$this.brokerage",
+                                                            {
+                                                                $add: [
+                                                                    "$$value.trueTotal",
+                                                                    "$$this.total"
+                                                                ]
+                                                            },
+                                                            "$$value.trueTotal"
+                                                        ]
+                                                    },
+                                                    falseTotal: {
+                                                        $cond: [
+                                                            {
+                                                                $not: [
+                                                                    "$$this.brokerage"
+                                                                ]
+                                                            },
+                                                            {
+                                                                $add: [
+                                                                    "$$value.falseTotal",
+                                                                    "$$this.total"
+                                                                ]
+                                                            },
+                                                            "$$value.falseTotal"
+                                                        ]
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    in: {
+                                        $subtract: [
+                                            "$$sums.falseTotal",
+                                            "$$sums.trueTotal"
+                                        ]
+                                    }
+                                }
+                            },
+                            2
+                        ]
+                    }
+                }
+            }
         ]
         const result = await this.logsModel.aggregate(aggregation);
-
         const total = result.reduce((sum, item) => sum + item.full_total, 0);
 
         // const vat = total * vatDecimal;

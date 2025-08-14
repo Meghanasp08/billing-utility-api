@@ -1182,23 +1182,24 @@ export class UploadService {
 
                 if (filteredTransaction) {
                   calculatedFee = parseFloat((filteredTransaction.chargeableAmount * (this.variables.nonLargeValueMerchantBps.value / 10000)).toFixed(3));
-                  applicableFee = parseFloat((parseInt(record["payment_logs.amount"]) > this.nonLargeValueCapMerchantCheck ? this.variables.nonLargeValueCapMerchant.value : calculatedFee).toFixed(3));
+                  // applicableFee = parseFloat((parseInt(record["payment_logs.amount"]) > this.nonLargeValueCapMerchantCheck ? this.variables.nonLargeValueCapMerchant.value : calculatedFee).toFixed(3));
+                  applicableFee = parseFloat((calculatedFee > this.variables.nonLargeValueCapMerchant.value ? this.variables.nonLargeValueCapMerchant.value : calculatedFee).toFixed(3));
                   unit_price = (this.variables.nonLargeValueMerchantBps.value / 10000);
                   volume = filteredTransaction.chargeableAmount ?? 0;
                   appliedLimit = filteredTransaction.appliedLimit;
                   limitApplied = filteredTransaction.appliedLimit > 0;
-                  isCapped = parseInt(record["payment_logs.amount"]) > this.nonLargeValueCapMerchantCheck; // Assign boolean value
+                  isCapped = calculatedFee > this.variables.nonLargeValueCapMerchant.value; // Assign boolean value
                   cappedAt = isCapped ? this.variables.nonLargeValueCapMerchant.value : 0;
 
                 }
               } else {
                 calculatedFee = parseFloat((parseInt(record["payment_logs.amount"]) * (this.variables.nonLargeValueMerchantBps.value / 10000)).toFixed(3));
-                applicableFee = parseFloat((parseInt(record["payment_logs.amount"]) > this.nonLargeValueCapMerchantCheck ? this.variables.nonLargeValueCapMerchant.value : calculatedFee).toFixed(3));
+                applicableFee = parseFloat((calculatedFee > this.variables.nonLargeValueCapMerchant.value ? this.variables.nonLargeValueCapMerchant.value : calculatedFee).toFixed(3));
                 unit_price = (this.variables.nonLargeValueMerchantBps.value / 10000);
                 volume = parseInt(record["payment_logs.amount"]) ?? 0;
                 appliedLimit = 0;
                 limitApplied = false;
-                isCapped = parseInt(record["payment_logs.amount"]) > this.nonLargeValueCapMerchantCheck; // Assign boolean value
+                isCapped = calculatedFee > this.variables.nonLargeValueCapMerchant.value; // Assign boolean value
                 cappedAt = isCapped ? this.variables.nonLargeValueCapMerchant.value : 0;
               }
             }
