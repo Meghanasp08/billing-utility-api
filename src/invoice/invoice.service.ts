@@ -7124,12 +7124,12 @@ export class InvoiceService {
                     </table>
             
                     <div class="invoice-summary-wrapper">
-                        <div class="note">
-                            ** - Inclusive of capped amount
-                        </div>
                         <div class="invoice-total">
                             <span class="invoice-total-label">SUB TOTAL (${memo.full_total >= 0 ? 'Debit' : 'Credit'})</span>
                             <span class="invoice-total-amount">AED ${(Math.abs(memo?.full_total)).toFixed(2) ?? 0}</span> 
+                        </div>
+                        <div class="note">
+                            ** - The volume shown for this entry represents the aggregated value for amount in payment log for non-capped transactions
                         </div>
                     </div>
                 </div>
@@ -7195,13 +7195,17 @@ export class InvoiceService {
             font-weight: bold;
             color: #1b194f;
         }
+            
         .note {
-            margin-top: 30px;
-            margin-bottom: 30px;
+            font-size: 12px;
             font-style: italic;
             color: #1b194f;
+            white-space: nowrap; /* keep in one line */
+            margin-left: 20px;
+            margin-top: 20px;
+            
         }
-        
+       
         .billing-row {
             margin-bottom: 5px;
         }
@@ -7394,16 +7398,14 @@ export class InvoiceService {
             /* background-color: #f5f5f5; */
         }
 
-       .invoice-summary-wrapper {            display: flex;
-            justify-content: space-between; /* pushes items to the edges */
-            align-items: center; /* vertical alignment */
+       .invoice-summary-wrapper {            
             margin-top: 30px;
-            margin-bottom: 50px;
-            }
+            margin-bottom: 20px;
+        }
             
         .invoice-total {
             text-align: right;
-            }
+        }
             
         .invoice-total-label {
             font-weight: bold;
@@ -7418,15 +7420,7 @@ export class InvoiceService {
             color: #1b194f;
             }
             
-        .note {
-            font-size: 12px;
-            color: #555;
-            margin-left: 20px;
-            white-space: nowrap; /* keep in one line */
-            }
-            lor: #1b194f;
 
-        }
 
         .table-total {
             text-align: right;
@@ -7499,14 +7493,6 @@ export class InvoiceService {
             font-weight: bold;
             font-size: 16px;
         }
-
-        .note {
-            margin-top: 30px;
-            margin-bottom: 30px;
-            font-style: italic;
-            color: #1b194f;
-        }
-
 
         .table-total {
             text-align: right;
@@ -8055,7 +8041,7 @@ export class InvoiceService {
             for (const item of tpp_data.collection_memo_subitem || []) {
                 revenue_data += `
                 <tr>
-                    <td>${item.label} ${item?.brokerage === true ? ' (Debit)' : ''}</td>
+                    <td>${item.label} ${item?.brokerage === true ? ' (Debit)' : ''} ${item?.key === 'merchant_collection_non_capped' ? '**' : ''}</td>
                     <td class="table-total">${item.quantity}</td>
                     <td class="table-total">${item.unit_price}</td>
                     <td class="table-total">${item.total?.toFixed(2)}</td>
@@ -8195,6 +8181,16 @@ export class InvoiceService {
             flex: 1;
         }
 
+        .note {
+            font-size: 12px;
+            font-style: italic;
+            color: #1b194f;
+            white-space: nowrap; /* keep in one line */
+            margin-left: 20px;
+            margin-top: 20px;
+            
+        }
+
         @media print {
            
 
@@ -8253,10 +8249,12 @@ export class InvoiceService {
             </tbody>
         </table>
 
-        <p style=" padding-top: 5px; color: #1b194f;  font-size: 14px; font-style: italic;  white-space: nowrap; /* keep in one line */">
-
+        <div class="note">
+            ** - The volume shown for this entry represents the aggregated value for amount in payment log for non-capped transactions
+        </div>
+        <div class="note">
             Note: The Grand Total is Net adjusted amount against commission amount.
-        </p>
+        </div>
 
  
 
