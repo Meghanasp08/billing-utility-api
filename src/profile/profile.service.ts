@@ -361,33 +361,6 @@ export class ProfileService {
 
       const numericOffset = Number(offset);
       const numericLimit = Number(limit);
-      // const total = await this.logModel.countDocuments(filter).exec();
-      // const aggregateQuery = [
-      //   {
-      //     $match: {
-      //       ...filter, // Existing filter conditions
-      //       chargeable: true,
-      //       success: true,
-      //     },
-      //   },
-      //   {
-      //     $group: {
-      //       _id: group === 'lfi' ? "$raw_api_log_data.lfi_id" : "$raw_api_log_data.tpp_id",
-      //       ...(group === 'tpp' && {
-      //         tpp_name: { $first: "$raw_api_log_data.tpp_name" },
-      //       }),
-      //       ...(group === 'lfi' && {
-      //         lfi_name: { $first: "$raw_api_log_data.lfi_name" },
-      //       }),
-      //       total_api_hub_fee: { $sum: "$applicableApiHubFee" },
-      //       total_calculated_fee: { $sum: "$calculatedFee" },
-      //       total_applicable_fee: { $sum: "$applicableFee" },
-      //     },
-      //   },
-      //   { $sort: { _id: 1 as 1 | -1 } },
-      //   { $skip: numericOffset },
-      //   { $limit: numericLimit },
-      // ];
       const aggregateQuery = [
         {
           $match: {
@@ -397,20 +370,117 @@ export class ProfileService {
             duplicate: false,
           },
         },
+        // Stage 1: Classify label
+        {
+          $addFields: {
+            label: {
+              $switch: {
+                branches: [
+                  {
+                    case: {
+                      $and: [
+                        { $in: ["$group", ["payment-bulk", "payment-non-bulk"]] },
+                        { $eq: ["$type", "merchant"] },
+                        { $eq: ["$isCapped", true] },
+                        { $eq: ["$successfullQuote", false] },
+                        { $eq: ["$lfiChargable", true] },
+                        { $gt: ["$volume", 0] },
+                        { $ne: ["$raw_api_log_data.payment_type", "LargeValueCollection"] }
+                      ]
+                    },
+                    then: "Merchant Collection Capped"
+                  },
+                  {
+                    case: {
+                      $and: [
+                        { $in: ["$group", ["payment-bulk", "payment-non-bulk"]] },
+                        { $eq: ["$type", "merchant"] },
+                        { $eq: ["$isCapped", false] },
+                        { $eq: ["$successfullQuote", false] },
+                        { $eq: ["$lfiChargable", true] },
+                        { $gt: ["$volume", 0] },
+                        { $ne: ["$raw_api_log_data.payment_type", "LargeValueCollection"] }
+                      ]
+                    },
+                    then: "Merchant Collection Non-Capped"
+                  },
+                  {
+                    case: {
+                      $and: [
+                        { $eq: ["$api_category", "FX Quotes"] },
+                        { $eq: ["$successfullQuote", true] },
+                        { $eq: ["$chargeable", true] }
+                      ]
+                    },
+                    then: "FX Brokerage Collection"
+                  },
+                  {
+                    case: {
+                      $and: [
+                        { $eq: ["$api_category", "Insurance Quote Sharing"] },
+                        { $eq: ["$successfullQuote", true] },
+                        { $eq: ["$chargeable", true] }
+                      ]
+                    },
+                    then: "Insurance Brokerage Collection"
+                  }
+                ],
+                default: "Other"
+              }
+            }
+          }
+        },
+        // Stage 2: Group by LFI/TPP and label
         {
           $group: {
-            _id: group === 'lfi' ? "$raw_api_log_data.lfi_id" : "$raw_api_log_data.tpp_id",
-            ...(group === 'tpp' && {
-              tpp_name: { $first: "$raw_api_log_data.tpp_name" },
-            }),
-            ...(group === 'lfi' && {
-              lfi_name: { $first: "$raw_api_log_data.lfi_name" },
-            }),
+            _id: {
+              id: group == "lfi" ? "$raw_api_log_data.lfi_id" : "$raw_api_log_data.tpp_id",
+              label: "$label"
+            },
+            ...(group === 'tpp' && { tpp_name: { $first: "$raw_api_log_data.tpp_name" } }),
+            ...(group === 'lfi' && { lfi_name: { $first: "$raw_api_log_data.lfi_name" } }),
             total_api_hub_fee: { $sum: "$applicableApiHubFee" },
             total_calculated_fee: { $sum: "$calculatedFee" },
             total_applicable_fee: { $sum: "$applicableFee" },
-          },
+            brokerage_fee: { $sum: "$brokerage_fee" }
+          }
         },
+        // Stage 3: Regroup by LFI/TPP only, separate brokerage/non-brokerage
+        {
+          $group: {
+            _id: "$_id.id",
+            ...(group === 'tpp' && { tpp_name: { $first: "$tpp_name" } }),
+            ...(group === 'lfi' && { lfi_name: { $first: "$lfi_name" } }),
+            total_api_hub_fee: { $sum: "$total_api_hub_fee" },
+            total_calculated_fee: { $sum: "$total_calculated_fee" },
+            total_applicable_fee: { $sum: "$total_applicable_fee" },
+            brokerage_total: {
+              $sum: {
+                $cond: [
+                  { $in: ["$_id.label", ["Insurance Brokerage Collection", "FX Brokerage Collection"]] },
+                  "$brokerage_fee",
+                  0
+                ]
+              }
+            },
+            non_brokerage_total: {
+              $sum: {
+                $cond: [
+                  { $in: ["$_id.label", ["Insurance Brokerage Collection", "FX Brokerage Collection"]] },
+                  0,
+                  "$total_applicable_fee"
+                ]
+              }
+            }
+          }
+        },
+        // Stage 4: Compute full_total
+        {
+          $addFields: {
+            full_total: { $subtract: ["$non_brokerage_total", "$brokerage_total"] }
+          }
+        },
+        // Stage 5: Round
         {
           $project: {
             _id: 1,
@@ -419,13 +489,17 @@ export class ProfileService {
             total_api_hub_fee: { $round: ["$total_api_hub_fee", 3] },
             total_calculated_fee: { $round: ["$total_calculated_fee", 3] },
             total_applicable_fee: { $round: ["$total_applicable_fee", 3] },
-          },
+            brokerage_total: { $round: ["$brokerage_total", 3] },
+            non_brokerage_total: { $round: ["$non_brokerage_total", 3] },
+            full_total: { $round: ["$full_total", 3] }
+          }
         },
-        { $sort: { _id: 1 as 1 | -1 } },
+        { $sort: { _id: 1 as 1 | -1 } }
       ];
+
       const paginatedQuery = [...aggregateQuery, { $skip: numericOffset }, { $limit: numericLimit }];
-      const result = await this.logModel.aggregate(paginatedQuery).exec();
-      const total = await this.logModel.aggregate(aggregateQuery).exec();
+      const result = await this.logModel.aggregate(paginatedQuery as any[]).exec();
+      const total = await this.logModel.aggregate(aggregateQuery as any[]).exec();
       // return result;
       return {
         result,
