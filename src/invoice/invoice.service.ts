@@ -7929,6 +7929,7 @@ export class InvoiceService {
 
         return result;
     }
+    
     async header_template() {
         return `
 
