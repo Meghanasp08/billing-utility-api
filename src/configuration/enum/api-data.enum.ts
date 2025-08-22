@@ -4,6 +4,7 @@ export enum KeyName {
     BALANCE = 'balance',
     PAYMENT_BULK = 'payment-bulk',
     PAYMENT_NON_BULK = 'payment-non-bulk',
+    PAYMENT_DATA = 'payment-data',
     CONFIRMATION = 'confirmation',
     INSURANCE = 'insurance',
     FX = 'fx',

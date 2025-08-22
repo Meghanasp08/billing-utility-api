@@ -1432,7 +1432,7 @@ export class UploadService {
       if (groupData?.key_name === 'balance' || groupData?.key_name === 'confirmation') {
         group = "data";
       }
-      if (record.success && (groupData?.key_name === 'payment-bulk' || groupData?.key_name === 'payment-non-bulk')) {
+      if (record.success && (groupData?.key_name === 'payment-bulk' || groupData?.key_name === 'payment-non-bulk' || groupData?.key_name === 'payment-data')) {
         record.success = this.paymentStatus.includes(record['payment_logs.status'])
       }
       if (record.chargeable && record.success &&
