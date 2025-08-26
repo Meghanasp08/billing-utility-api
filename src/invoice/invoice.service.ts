@@ -7104,7 +7104,7 @@ export class InvoiceService {
                 lfi_list += `<tr>
                         <td class="table-td">00${lfi_count}</td>
                         <td class="table-td">${item?.lfi_data?.lfi_name} - ${item?.lfi_data?.lfi_id} (${item.full_total >= 0 ? 'Debit' : 'Credit'})</td>
-                        <td class="table-total">${Math.abs(item.full_total)} </td>
+                        <td class="table-total">${Math.abs(item.full_total)?.toFixed(2)} </td>
                     </tr>`
                 lfi_count++
 
@@ -7142,12 +7142,12 @@ export class InvoiceService {
             for (const service_items of serviceInitiationItem.items) {
                 service_initiation += ` <tr>
                 <td>${service_items.description}</td>
-                <td class="table-total">${service_items.quantity ?? 0}</td>
-                <td class="table-total">${service_items.unit_price ?? 0}</td>
-                <td class="table-total">${service_items.total ?? 0}</td>
+                <td class="table-total">${service_items?.quantity ?? 0}</td>
+                <td class="table-total">${service_items?.unit_price ?? 0}</td>
+                <td class="table-total">${service_items?.total?.toFixed(2) ?? 0.00}</td>
                 <td class="table-total">5</td>
-                <td class="table-total">${service_items.vat_amount ?? 0}</td>
-                <td class="table-total">${service_items.full_total ?? 0}</td>
+                <td class="table-total">${service_items?.vat_amount?.toFixed(2) ?? 0}</td>
+                <td class="table-total">${service_items?.full_total?.toFixed(2) ?? 0.00}</td>
             </tr>`;
             }
 
@@ -7158,12 +7158,12 @@ export class InvoiceService {
 
                 data_sharing += ` <tr>
                 <td>${data_items.description}</td>
-                <td class="table-total">${data_items.quantity ?? 0}</td>
-                <td class="table-total">${data_items?.unit_price ?? 0}</td>
-                <td class="table-total">${data_items.total ?? 0}</td>
+                <td class="table-total">${data_items?.quantity ?? 0.00}</td>
+                <td class="table-total">${data_items?.unit_price ?? 0.00}</td>
+                <td class="table-total">${data_items?.total?.toFixed(2) ?? 0.00}</td>
                 <td class="table-total">5</td>
-                <td class="table-total">${data_items.vat_amount ?? 0}</td>
-                <td class="table-total">${data_items.full_total ?? 0}</td>
+                <td class="table-total">${data_items?.vat_amount?.toFixed(2) ?? 0.00}</td>
+                <td class="table-total">${data_items?.full_total?.toFixed(2) ?? 0.00}</td>
             </tr>`;
             }
 
@@ -7173,12 +7173,12 @@ export class InvoiceService {
             for (const service_fee_items of serviceFeeItem.items) {
                 service_fee += ` <tr>
                 <td>${service_fee_items.description}</td>
-                <td class="table-total">${service_fee_items.quantity ?? 0}</td>
-                <td class="table-total">${service_fee_items.unit_price ?? 0}</td>
-                <td class="table-total">${service_fee_items.total ?? 0}</td>
+                <td class="table-total">${service_fee_items?.quantity ?? 0.00}</td>
+                <td class="table-total">${service_fee_items?.unit_price ?? 0.00}</td>
+                <td class="table-total">${service_fee_items?.total?.toFixed(2) ?? 0.00}</td>
                 <td class="table-total">5</td>
-                <td class="table-total">${service_fee_items.vat_amount ?? 0}</td>
-                <td class="table-total">${service_fee_items.full_total ?? 0}</td>
+                <td class="table-total">${service_fee_items?.vat_amount ?? 0}</td>
+                <td class="table-total">${service_fee_items?.full_total?.toFixed(2) ?? 0.00}</td>
             </tr>`;
             }
 
@@ -7232,8 +7232,8 @@ export class InvoiceService {
                         <tr>
                         <td>${label.label} ${label?.key === 'merchant_collection_non_capped' ? '**' : ''} </td>
                         <td class="table-total">${label?.quantity ?? 0}</td>
-                        <td class="table-total">${label?.unit_price.toFixed(3) ?? 0}</td>
-                        <td class="table-total">${label?.total.toFixed(2) ?? 0}</td>
+                        <td class="table-total">${label?.unit_price.toFixed(3) ?? 0.000}</td>
+                        <td class="table-total">${label?.total?.toFixed(2) ?? 0.00}</td>
                         </tr>
                         `;
                     }
@@ -7264,8 +7264,8 @@ export class InvoiceService {
                             <tr>
                             <td>${label.label} </td>
                             <td class="table-total">${label?.quantity ?? 0}</td>
-                            <td class="table-total">${label?.unit_price.toFixed(3) ?? 0}</td>
-                            <td class="table-total">${label?.total.toFixed(2) ?? 0}</td>
+                            <td class="table-total">${label?.unit_price.toFixed(3) ?? 0.000}</td>
+                            <td class="table-total">${label?.total?.toFixed(2) ?? 0.00}</td>
                             </tr>
                     `;
                     }
@@ -7798,10 +7798,10 @@ export class InvoiceService {
                     <tr>
                         <td class="table-td">001</td>
                         <td class="table-td">Nebras Invoice - ${monthName} ${data.invoice_year}</td>
-                        <td class="table-td table-total">${nebras_taxable_amount}</td>
-                        <td class="table-td table-total">${data.vat_percent}</td>
-                        <td class="table-td table-total">${data.vat_total}</td>
-                        <td class="table-total">${data.invoice_total}</td>
+                        <td class="table-td table-total">${nebras_taxable_amount?.toFixed(2)}</td>
+                        <td class="table-td table-total">${data?.vat_percent}</td>
+                        <td class="table-td table-total">${data?.vat_total.toFixed(2)}</td>
+                        <td class="table-total">${data?.invoice_total.toFixed(2)}</td>
                     </tr>
                   
                 </tbody>
@@ -7812,7 +7812,7 @@ export class InvoiceService {
                 
 
             <div class="total-row">
-                Total due <b>${Math.abs(total_due).toFixed(2)}</b> by <b>${moment(data.due_date).format('Do MMMM YYYY')}</b>
+                Total due AED <b>${Math.abs(total_due).toFixed(2)}</b> by <b>${moment(data.due_date).format('Do MMMM YYYY')}</b>
             </div>
         </div>
 
@@ -7911,7 +7911,7 @@ export class InvoiceService {
                             ${service_initiation}
                             <tr class="">
                                 <td class="sub-total-row " colspan="6">SUB TOTAL</td>
-                                <td class="table-total">${serviceInitiationItem?.category_total ?? 0}</td>
+                                <td class="table-total">${serviceInitiationItem?.category_total?.toFixed(2) ?? 0.00}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -7940,7 +7940,7 @@ export class InvoiceService {
                             ${data_sharing}
                             <tr>
                                 <td class="sub-total-row" colspan="6">SUB TOTAL</td>
-                                <td class="table-total">${dataSharingItem?.category_total ?? 0}</td>
+                                <td class="table-total">${dataSharingItem?.category_total?.toFixed(2) ?? 0.00}</td>
                             </tr>
                             
                         </tbody>
@@ -7970,7 +7970,7 @@ export class InvoiceService {
                             ${service_fee}
                             <tr class="">
                                 <td class="sub-total-row " colspan="6">SUB TOTAL</td>
-                                <td class="table-total">${serviceFeeItem?.category_total ?? 0}</td>
+                                <td class="table-total">${serviceFeeItem?.category_total ?? 0.00}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -7979,7 +7979,7 @@ export class InvoiceService {
 
                 <div class="invoice-total" style = "padding-top:0px !important; margin-top:0px !important;">
                     <span class="invoice-total-label">Invoice Total</span>
-                    <span class="invoice-total-amount"> AED ${data?.invoice_total ?? 0}</span>
+                    <span class="invoice-total-amount"> AED ${data?.invoice_total ?? 0.00}</span>
                 </div>
 
 
@@ -8195,9 +8195,9 @@ export class InvoiceService {
                 revenue_data += `
                 <tr>
                     <td>${item.label} ${item?.brokerage === true ? ' (Debit)' : ''} ${item?.key === 'merchant_collection_non_capped' ? '**' : ''}</td>
-                    <td class="table-total">${item.quantity}</td>
-                    <td class="table-total">${item.unit_price}</td>
-                    <td class="table-total">${item.total?.toFixed(2)}</td>
+                    <td class="table-total">${item?.quantity}</td>
+                    <td class="table-total">${item?.unit_price?.toFixed(4)}</td>
+                    <td class="table-total">${item?.total?.toFixed(2)}</td>
                 </tr>`;
             }
 
