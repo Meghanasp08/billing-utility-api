@@ -853,8 +853,14 @@ export class UploadService {
   }
 
   async populateLfiData(rawData: any[]) {
-    const uniqueLfiIds = Array.from(new Set(rawData.map(data => data["raw_api_log_data.lfi_id"])));
-
+    const uniqueLfiIds = Array.from(
+      new Set(
+        rawData
+          .map(data => data["raw_api_log_data.lfi_id"])
+          .filter(id => id != null) // removes null & undefined
+      )
+    );
+    console.log("uniqueLfiIds", uniqueLfiIds);
     const lfiDataToInsert = uniqueLfiIds.map(lfi_id => ({
       lfi_id,
       lfi_name: rawData.find(data => data["raw_api_log_data.lfi_id"] === lfi_id)["raw_api_log_data.lfi_name"],
@@ -1383,7 +1389,8 @@ export class UploadService {
       const success = /^2([a-zA-Z0-9]{2}|\d{2})$/.test(record["raw_api_log_data.tpp_response_code_group"]) &&
         /^2([a-zA-Z0-9]{2}|\d{2})$/.test(record["raw_api_log_data.lfi_response_code_group"]);
 
-      if (islfiChargable || isChargeable || success) {
+      console.log("success-CHECK", success, index + 2)
+      if ((islfiChargable || isChargeable) && success) {
         let errorTppLfi = !record["raw_api_log_data.tpp_id"] || !record["raw_api_log_data.tpp_name"] || !record["raw_api_log_data.lfi_id"] || !record["raw_api_log_data.lfi_name"];
         if (errorTppLfi) {
           await this.uploadLog.findByIdAndUpdate(
@@ -1528,7 +1535,7 @@ export class UploadService {
   async matchTemplateVersionUrl(url: string): Promise<string> {
     try {
       const versionRegex = /\/v\d+\.\d+/;
-
+      // console.log("url",url)
       const parts = url.split(versionRegex);
       return parts[1] || ''; // Return the remaining path after the version
     } catch (error) {
