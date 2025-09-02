@@ -13,6 +13,7 @@ import { UsersModule } from './users/users.module';
 import { RoleModule } from './role/role.module';
 import { BullModule } from '@nestjs/bull';
 import { ScheduleModule } from '@nestjs/schedule';
+import { BrokerageConfigModule } from './brokerage_config/brokerage_config.module';
 @Module({
   imports: [
     MongooseModule.forRoot(process.env.MONGO_URL || 'mongodb://localhost:27017/defaultdb'),
@@ -32,6 +33,7 @@ import { ScheduleModule } from '@nestjs/schedule';
       },
     }),
     ScheduleModule.forRoot(),
+    BrokerageConfigModule,
   ],
   controllers: [AppController],
   providers: [AppService],
