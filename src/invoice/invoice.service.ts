@@ -112,7 +112,7 @@ export class InvoiceService {
         const dataServiceFeePercentage = globalConfiData.find(item => item.key === "serviceFeePercentage")?.value ?? 0;
         const nonLargeValueCapMerchant = globalConfiData.find(item => item.key === "nonLargeValueCapMerchant")?.value ?? 0;
 
-        const vatPercent = vat?.value ?? 5 ;
+        const vatPercent = vat?.value ?? 5;
         const vatDecimal = vatPercent / 100;
         nonLargeValueMerchantBps = Number(nonLargeValueMerchantBps) / 10000
         const tppData = await this.tppDataModel.find();
@@ -995,46 +995,9 @@ export class InvoiceService {
                                                 {
                                                     $eq: ["$type", "merchant"]
                                                 },
-                                                {
-                                                    $eq: ["$isCapped", true]
-                                                },
-                                                {
-                                                    $eq: [
-                                                        "$successfullQuote",
-                                                        false
-                                                    ]
-                                                },
-                                                {
-                                                    $eq: ["$lfiChargable", true]
-                                                },
-                                                {
-                                                    $ne: [
-                                                        "$raw_api_log_data.payment_type",
-                                                        "LargeValueCollection"
-                                                    ]
-                                                }
-                                            ]
-                                        },
-                                        then: "Merchant Collection Capped"
-                                    },
-                                    {
-                                        case: {
-                                            $and: [
-                                                {
-                                                    $in: [
-                                                        "$group",
-                                                        [
-                                                            "payment-bulk",
-                                                            "payment-non-bulk"
-                                                        ]
-                                                    ]
-                                                },
-                                                {
-                                                    $eq: ["$type", "merchant"]
-                                                },
-                                                {
-                                                    $eq: ["$isCapped", false]
-                                                },
+                                                // {
+                                                //     $eq: ["$isCapped", true]
+                                                // },
                                                 {
                                                     $eq: [
                                                         "$successfullQuote",
@@ -1052,8 +1015,45 @@ export class InvoiceService {
                                                 }
                                             ]
                                         },
-                                        then: "Merchant Collection Non-Capped"
+                                        then: "Merchant Collection"
                                     },
+                                    // {
+                                    //     case: {
+                                    //         $and: [
+                                    //             {
+                                    //                 $in: [
+                                    //                     "$group",
+                                    //                     [
+                                    //                         "payment-bulk",
+                                    //                         "payment-non-bulk"
+                                    //                     ]
+                                    //                 ]
+                                    //             },
+                                    //             {
+                                    //                 $eq: ["$type", "merchant"]
+                                    //             },
+                                    //             {
+                                    //                 $eq: ["$isCapped", false]
+                                    //             },
+                                    //             {
+                                    //                 $eq: [
+                                    //                     "$successfullQuote",
+                                    //                     false
+                                    //                 ]
+                                    //             },
+                                    //             {
+                                    //                 $eq: ["$lfiChargable", true]
+                                    //             },
+                                    //             {
+                                    //                 $ne: [
+                                    //                     "$raw_api_log_data.payment_type",
+                                    //                     "LargeValueCollection"
+                                    //                 ]
+                                    //             }
+                                    //         ]
+                                    //     },
+                                    //     then: "Merchant Collection Non-Capped"
+                                    // },
                                     {
                                         case: {
                                             $and: [
@@ -1348,32 +1348,34 @@ export class InvoiceService {
                                     // only push when brokerage == true
                                     {
                                         label: "$_id.label",
-                                        quantity: {
-                                            $cond: {
-                                                if: {
-                                                    $eq: [
-                                                        "$_id.label",
-                                                        "Merchant Collection Capped"
-                                                    ]
-                                                },
-                                                then: "$count",
-                                                else: "$quantity"
-                                            }
-                                        },
-                                        unit_price: {
-                                            $cond: {
-                                                if: {
-                                                    $eq: [
-                                                        "$_id.label",
-                                                        "Merchant Collection Capped"
-                                                    ]
-                                                },
-                                                then: "$cappedAmount",
-                                                else: {
-                                                    $round: ["$unit_price", 4]
-                                                }
-                                            }
-                                        },
+                                        quantity: "$quantity",
+                                        // {
+                                        //     $cond: {
+                                        //         if: {
+                                        //             $eq: [
+                                        //                 "$_id.label",
+                                        //                 "Merchant Collection Capped"
+                                        //             ]
+                                        //         },
+                                        //         then: "$count",
+                                        //         else: "$quantity"
+                                        //     }
+                                        // },
+                                        unit_price: "$unit_price",
+                                        //  {
+                                        //     $cond: {
+                                        //         if: {
+                                        //             $eq: [
+                                        //                 "$_id.label",
+                                        //                 "Merchant Collection Capped"
+                                        //             ]
+                                        //         },
+                                        //         then: "$cappedAmount",
+                                        //         else: {
+                                        //             $round: ["$unit_price", 4]
+                                        //         }
+                                        //     }
+                                        // },
                                         total: {
                                             $round: ["$total", 2]
                                         },
@@ -1432,8 +1434,8 @@ export class InvoiceService {
                         labels: {
                             $map: {
                                 input: [
-                                    "Merchant Collection Capped",
-                                    "Merchant Collection Non-Capped",
+                                    "Merchant Collection",
+                                    // "Merchant Collection Non-Capped",
                                     "Peer-to-Peer",
                                     "Me-to-Me Transfer",
                                     "Large value collection",
@@ -1466,20 +1468,20 @@ export class InvoiceService {
                                                             case: {
                                                                 $eq: [
                                                                     "$$expectedLabel",
-                                                                    "Merchant Collection Capped"
-                                                                ]
-                                                            },
-                                                            then: nonLargeValueCapMerchant
-                                                        },
-                                                        {
-                                                            case: {
-                                                                $eq: [
-                                                                    "$$expectedLabel",
-                                                                    "Merchant Collection Non-Capped"
+                                                                    "Merchant Collection"
                                                                 ]
                                                             },
                                                             then: nonLargeValueMerchantBps
                                                         },
+                                                        // {
+                                                        //     case: {
+                                                        //         $eq: [
+                                                        //             "$$expectedLabel",
+                                                        //             "Merchant Collection Non-Capped"
+                                                        //         ]
+                                                        //     },
+                                                        //     then: nonLargeValueMerchantBps
+                                                        // },
                                                         {
                                                             case: {
                                                                 $eq: [
@@ -1545,20 +1547,20 @@ export class InvoiceService {
                                                             case: {
                                                                 $eq: [
                                                                     "$$expectedLabel",
-                                                                    "Merchant Collection Capped"
+                                                                    "Merchant Collection"
                                                                 ]
                                                             },
-                                                            then: "merchant_collection_capped"
+                                                            then: "merchant_collection"
                                                         },
-                                                        {
-                                                            case: {
-                                                                $eq: [
-                                                                    "$$expectedLabel",
-                                                                    "Merchant Collection Non-Capped"
-                                                                ]
-                                                            },
-                                                            then: "merchant_collection_non_capped"
-                                                        },
+                                                        // {
+                                                        //     case: {
+                                                        //         $eq: [
+                                                        //             "$$expectedLabel",
+                                                        //             "Merchant Collection Non-Capped"
+                                                        //         ]
+                                                        //     },
+                                                        //     then: "merchant_collection_non_capped"
+                                                        // },
                                                         {
                                                             case: {
                                                                 $eq: [
@@ -3390,9 +3392,9 @@ export class InvoiceService {
                                                 {
                                                     $eq: ["$type", "merchant"]
                                                 },
-                                                {
-                                                    $eq: ["$isCapped", true]
-                                                },
+                                                // {
+                                                //     $eq: ["$isCapped", true]
+                                                // },
                                                 {
                                                     $gt: ["$volume", 0]
                                                 },
@@ -3413,48 +3415,48 @@ export class InvoiceService {
                                                 }
                                             ]
                                         },
-                                        then: "Merchant Collection Capped"
+                                        then: "Merchant Collection"
                                     },
-                                    {
-                                        case: {
-                                            $and: [
-                                                {
-                                                    $in: [
-                                                        "$group",
-                                                        [
-                                                            "payment-bulk",
-                                                            "payment-non-bulk"
-                                                        ]
-                                                    ]
-                                                },
-                                                {
-                                                    $eq: ["$type", "merchant"]
-                                                },
-                                                {
-                                                    $eq: ["$isCapped", false]
-                                                },
-                                                {
-                                                    $eq: [
-                                                        "$successfullQuote",
-                                                        false
-                                                    ]
-                                                },
-                                                {
-                                                    $eq: ["$lfiChargable", true]
-                                                },
-                                                {
-                                                    $gt: ["$volume", 0]
-                                                },
-                                                {
-                                                    $ne: [
-                                                        "$raw_api_log_data.payment_type",
-                                                        "LargeValueCollection"
-                                                    ]
-                                                }
-                                            ]
-                                        },
-                                        then: "Merchant Collection Non-Capped"
-                                    },
+                                    // {
+                                    //     case: {
+                                    //         $and: [
+                                    //             {
+                                    //                 $in: [
+                                    //                     "$group",
+                                    //                     [
+                                    //                         "payment-bulk",
+                                    //                         "payment-non-bulk"
+                                    //                     ]
+                                    //                 ]
+                                    //             },
+                                    //             {
+                                    //                 $eq: ["$type", "merchant"]
+                                    //             },
+                                    //             {
+                                    //                 $eq: ["$isCapped", false]
+                                    //             },
+                                    //             {
+                                    //                 $eq: [
+                                    //                     "$successfullQuote",
+                                    //                     false
+                                    //                 ]
+                                    //             },
+                                    //             {
+                                    //                 $eq: ["$lfiChargable", true]
+                                    //             },
+                                    //             {
+                                    //                 $gt: ["$volume", 0]
+                                    //             },
+                                    //             {
+                                    //                 $ne: [
+                                    //                     "$raw_api_log_data.payment_type",
+                                    //                     "LargeValueCollection"
+                                    //                 ]
+                                    //             }
+                                    //         ]
+                                    //     },
+                                    //     then: "Merchant Collection Non-Capped"
+                                    // },
                                     {
                                         case: {
                                             $and: [
@@ -3760,32 +3762,34 @@ export class InvoiceService {
                                     // only push when brokerage == true
                                     {
                                         label: "$_id.label",
-                                        quantity: {
-                                            $cond: {
-                                                if: {
-                                                    $eq: [
-                                                        "$_id.label",
-                                                        "Merchant Collection Capped"
-                                                    ]
-                                                },
-                                                then: "$count",
-                                                else: "$quantity"
-                                            }
-                                        },
-                                        unit_price: {
-                                            $cond: {
-                                                if: {
-                                                    $eq: [
-                                                        "$_id.label",
-                                                        "Merchant Collection Capped"
-                                                    ]
-                                                },
-                                                then: "$cappedAmount",
-                                                else: {
-                                                    $round: ["$unit_price", 4]
-                                                }
-                                            }
-                                        },
+                                        quantity: "$quantity",
+                                        //  {
+                                        //     $cond: {
+                                        //         if: {
+                                        //             $eq: [
+                                        //                 "$_id.label",
+                                        //                 "Merchant Collection Capped"
+                                        //             ]
+                                        //         },
+                                        //         then: "$count",
+                                        //         else: "$quantity"
+                                        //     }
+                                        // },
+                                        unit_price:"$unit_price",
+                                        //  {
+                                        //     $cond: {
+                                        //         if: {
+                                        //             $eq: [
+                                        //                 "$_id.label",
+                                        //                 "Merchant Collection Capped"
+                                        //             ]
+                                        //         },
+                                        //         then: "$cappedAmount",
+                                        //         else: {
+                                        //             $round: ["$unit_price", 4]
+                                        //         }
+                                        //     }
+                                        // },
                                         total: {
                                             $round: ["$total", 2]
                                         },
@@ -3888,20 +3892,20 @@ export class InvoiceService {
                                                             case: {
                                                                 $eq: [
                                                                     "$$labelItem.label",
-                                                                    "Merchant Collection Capped"
+                                                                    "Merchant Collection"
                                                                 ]
                                                             },
-                                                            then: "merchant_collection_capped"
+                                                            then: "merchant_collection"
                                                         },
-                                                        {
-                                                            case: {
-                                                                $eq: [
-                                                                    "$$labelItem.label",
-                                                                    "Merchant Collection Non-Capped"
-                                                                ]
-                                                            },
-                                                            then: "merchant_collection_non_capped"
-                                                        },
+                                                        // {
+                                                        //     case: {
+                                                        //         $eq: [
+                                                        //             "$$labelItem.label",
+                                                        //             "Merchant Collection Non-Capped"
+                                                        //         ]
+                                                        //     },
+                                                        //     then: "merchant_collection_non_capped"
+                                                        // },
                                                         {
                                                             case: {
                                                                 $eq: [
@@ -7166,25 +7170,60 @@ export class InvoiceService {
             </tr>`;
             }
 
-            const serviceFeeItem = data?.invoice_items.find(item => item.category === 'service_fee');
+
+            const serviceFeeItem = data?.invoice_items.find(item => item?.category === 'service_fee') ?? [];
             let service_fee = ''
 
-            for (const service_fee_items of serviceFeeItem.items) {
-                service_fee += ` <tr>
-                <td>${service_fee_items.description}</td>
-                <td class="table-total">${service_fee_items?.quantity ?? 0.00}</td>
-                <td class="table-total">${service_fee_items?.unit_price ?? 0.00}</td>
-                <td class="table-total">${service_fee_items?.total?.toFixed(2) ?? 0.00}</td>
-                <td class="table-total">5</td>
-                <td class="table-total">${service_fee_items?.vat_amount ?? 0}</td>
-                <td class="table-total">${service_fee_items?.full_total?.toFixed(2) ?? 0.00}</td>
-            </tr>`;
+            if (serviceFeeItem && serviceFeeItem.length != 0) {
+                let service_fee_array = ''
+
+                for (const service_fee_items of serviceFeeItem?.items ?? []) {
+                    service_fee_array += ` <tr>
+                    <td>${service_fee_items.description}</td>
+                    <td class="table-total">${service_fee_items?.quantity ?? 0.00}</td>
+                    <td class="table-total">${service_fee_items?.unit_price ?? 0.00}</td>
+                    <td class="table-total">${service_fee_items?.total?.toFixed(2) ?? 0.00}</td>
+                    <td class="table-total">5</td>
+                    <td class="table-total">${service_fee_items?.vat_amount ?? 0}</td>
+                    <td class="table-total">${service_fee_items?.full_total?.toFixed(2) ?? 0.00}</td>
+                </tr>`;
+                }
+
+                service_fee +=
+                    `<div class="section" style = "padding-bottom:0px !important; margin-bottom:0px !important;">
+                        <div class="section-title">
+                            <span>Service Fee</span>
+                            
+                        </div>
+
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Description </th>
+                                    <th class="table-total">Amount Collected</th>
+                                    <th class="table-total">Collection %</th>
+                                    <th class="table-total">Taxable Amount </th>
+                                    <th class="table-total">VAT % </th>
+                                    <th class="table-total">VAT Amount  </th>
+                                    <th class="table-total">Gross Amount </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${service_fee_array}
+                                <tr class="">
+                                    <td class="sub-total-row " colspan="6">SUB TOTAL</td>
+                                    <td class="table-total">${serviceFeeItem?.category_total ?? 0.00}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        
+                    </div>`
             }
 
             let collection_memo = ''
             let displayIndex = 0;
             for (const memo of data?.tpp_usage_per_lfi || []) {
-                console.log("MEMO",memo)
+                console.log("MEMO", memo)
                 displayIndex++;
                 collection_memo += ` 
             <div class="new-page-section">
@@ -7236,9 +7275,9 @@ export class InvoiceService {
 
                         collection_memo += `
                         <tr>
-                        <td>${label.label} ${label?.key === 'merchant_collection_non_capped' ? '**' : ''} </td>
+                        <td>${label.label} ${label?.key === 'merchant_collection' ? '**' : ''} </td>
                         <td class="table-total">${label?.quantity ?? 0}</td>
-                        <td class="table-total">${label?.unit_price.toFixed(3) ?? 0.000}</td>
+                        <td class="table-total">${label?.unit_price.toFixed(4) ?? 0.000}</td>
                         <td class="table-total">${label?.total?.toFixed(2) ?? 0.00}</td>
                         </tr>
                         `;
@@ -7294,7 +7333,7 @@ export class InvoiceService {
                             <span class="invoice-total-amount">AED ${(Math.abs(memo?.full_total)).toFixed(2) ?? 0}</span> 
                         </div>
                         <div class="note">
-                            ** - The volume indicated for this entry reflects the aggregated amount for non-capped transactions.
+                            ** - This total is calculated after the application of the per transaction cap for collection fees.
                         </div>
                     </div>
                 </div>
@@ -7961,34 +8000,7 @@ export class InvoiceService {
                 </div>
 
                 
-                <div class="section" style = "padding-bottom:0px !important; margin-bottom:0px !important;">
-                    <div class="section-title">
-                        <span>Service Fee</span>
-                        
-                    </div>
-
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Description </th>
-                                <th class="table-total">Amount Collected</th>
-                                <th class="table-total">Collection %</th>
-                                <th class="table-total">Taxable Amount </th>
-                                <th class="table-total">VAT % </th>
-                                <th class="table-total">VAT Amount  </th>
-                                <th class="table-total">Gross Amount </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${service_fee}
-                            <tr class="">
-                                <td class="sub-total-row " colspan="6">SUB TOTAL</td>
-                                <td class="table-total">${serviceFeeItem?.category_total ?? 0.00}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    
-                </div>
+                ${service_fee}
 
                 <div class="invoice-total" style = "padding-top:0px !important; margin-top:0px !important;">
                     <span class="invoice-total-label">Invoice Total</span>
@@ -8229,7 +8241,7 @@ export class InvoiceService {
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LFI Statement of Fee</title>
+    <title>LFI Statement of Fees</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -8377,7 +8389,7 @@ export class InvoiceService {
     <div class="container">
         <div class="header">
             <div>
-                <h1>LFI STATEMENT OF FEE</h1>
+                <h1>LFI STATEMENT OF FEES</h1>
                 <h3>Nebras Collection Services</h3>
                 <p style="color: #1b194f;">Fee Statement 001<br>${moment(data.createdAt).format('DD MMMM YYYY')} </p>
                 <p class="lif-details"><br>${data.lfi_name}<br>LFI ID:${data.lfi_id}</p>
@@ -8413,7 +8425,7 @@ export class InvoiceService {
         </table>
 
         <div class="note">
-            ** - The volume indicated for this entry reflects the aggregated amount for non-capped transactions.
+            ** - This total is calculated after the application of the per transaction cap for collection fees.
         </div>
         <div class="note">
             Note: The Grand Total is Net adjusted amount against commission amount.
