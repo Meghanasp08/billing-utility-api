@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpStatus, Param, Patch, Post, Req, UseGuards, ValidationPipe } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpStatus, Param, Patch, Post, Req, UseGuards, ValidationPipe } from '@nestjs/common';
 import { BrokerageConfigService } from './brokerage_config.service';
 import { JwtAuthGuard } from 'src/auth/guard/jwt-auth-guard';
 import { ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
@@ -48,6 +48,21 @@ export class BrokerageConfigController {
       const result = await this.brokerageConfigService.updateConfigurationData(id, updateGlobalConfigurationDto);
       return {
         message: 'Brokerage configuration data updated successfully',
+        result: result,
+        statusCode: HttpStatus.OK
+      }
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  @ApiOperation({ summary: 'Update TPP Lfi details' })
+  @Delete('/:id')
+  async deleteConfigurationData(@Req() req: any, @Param('id') id: string,) {
+    try {
+      const result = await this.brokerageConfigService.deleteConfigurationData(id);
+      return {
+        message: 'Brokerage configuration data deleted successfully',
         result: result,
         statusCode: HttpStatus.OK
       }

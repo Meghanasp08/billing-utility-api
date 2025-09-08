@@ -10,7 +10,7 @@ export const AppConfig = {
     ],
     peerToPeerTypes: [
         "PushP2P",
-        "PullP2PPayment",
+        "PullP2P",
     ],
     paymentTypesForMerchant: [
         "Collection",
@@ -24,7 +24,7 @@ export const AppConfig = {
     discount: 200,
     aedConstant: 100,
     highValueMerchantcapCheck: 20000,
-    paymentTypes: ['Collection', 'LargeValueCollection', 'PushP2P', 'PullP2PPayment', 'Me2Me', ''],
+    paymentTypes: ['Collection', 'LargeValueCollection', 'PushP2P', 'PullP2P', 'Me2Me', ''],
     paymentStatus: ['AcceptedSettlementCompleted', 'AcceptedCreditSettlementCompleted', 'AcceptedWithoutPosting']
 };
 
