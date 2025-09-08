@@ -2,13 +2,11 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsBoolean, IsNotEmpty, IsNumber } from 'class-validator';
 
 export class UpdateTppDataDto {
-    @ApiProperty({
-        description: 'Brokerage fee for the TPP.',
-        example: 2.99,
-        // required: true,
-    })
-    @IsNumber()
-    // @IsNotEmpty()
+    // @ApiProperty({
+    //     description: 'Brokerage fee for the TPP.',
+    //     example: 2.99,
+    // })
+    // @IsNumber()
     brokerage_fee: number;
 
     @ApiProperty({

@@ -64,4 +64,16 @@ export class BrokerageConfigService {
 
         return updatedglobalData;
     }
+
+    async deleteConfigurationData(id: string) {
+
+        const existingBrokerageConfiguration = await this.BrokerageConfiguration.findById(id);
+        if (!existingBrokerageConfiguration) {
+            throw new NotFoundException(`BrokerageConfiguration data with ID ${id} not found.`);
+        }
+
+        const deletedGlobalData = await this.BrokerageConfiguration.findByIdAndDelete(id);
+        return deletedGlobalData;
+
+    }
 }
