@@ -584,7 +584,9 @@ export class UploadService {
         file2Path: `${process.env.UPLOAD_HOST}:${process.env.APP_PORT}/files/` + file2Path,
         jobId: jobId,
       }
-      this.uploadService.emit('process_upload', body);
+      console.log("micro service runing in:", process.env.UPLOAD_HOST, ":", process.env.UPLOAD_PORT)
+      const chek = this.uploadService.emit('process_upload', body);
+      console.log('emitted', chek);
       return {
         message: 'Files uploaded successfully',
         jobId: jobId,

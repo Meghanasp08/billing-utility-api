@@ -24,8 +24,7 @@ import { Claims } from 'src/common/claims/claims.decorator';
 import { UploadService } from './upload.service';
 
 
-// Global processing flag
-let isProcessing = false;
+
 @Controller('upload')
 export class UploadController {
     constructor(private readonly uploadService: UploadService) { }
