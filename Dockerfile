@@ -32,10 +32,10 @@ ENV ACCESS_TOKEN_EXPIRY=30000
 ENV REFRESH_TOKEN_EXPIRY=300000
 
 #ENV for Microservice
-ENV UPLOAD_HOST=uniteybillingprocesslog
+ENV UPLOAD_HOST=
 ENV UPLOAD_PORT=3000
 ENV API_PORT=3000
-ENV API_HOST=uniteybillingapi
+ENV API_HOST=
 
 RUN mkdir -p /usr/src/uniteybillingapi
 # Set the working directory
