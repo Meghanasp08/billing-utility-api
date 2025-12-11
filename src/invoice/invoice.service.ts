@@ -7320,9 +7320,14 @@ export class InvoiceService {
             color: #000046;
         }
 
+        .header h2 {
+            margin-bottom: 5px;
+        }
+
         .header h3 {
-            font-size: 20px;
-            margin: 8;
+            font-size: 18px;
+            margin: 0;
+            margin-top: 5px;
             color: #000046;
         }
 
