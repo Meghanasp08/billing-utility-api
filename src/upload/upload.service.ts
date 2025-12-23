@@ -75,6 +75,8 @@ export class UploadService {
     bulkPaymentMinTransactionThreshold?: any; // 10 transactions
     bulkPaymentFlatFeeBelow10?: any; // 0.250 aed (250 fils)
     bulkPaymentPerTransactionFeeAbove10?: any; // 0.025 aed (25 fils)
+    bulkPaymentFlatFeeBelow10MeToMe?: any; // 0.2 aed (250 fils)
+    bulkPaymentPerTFeeAbove10MeToMe?: any;
   } = {};
 
 
@@ -573,14 +575,62 @@ export class UploadService {
   async mergeCsvFilesMicorservice(userEmail: string, file1Path: string, file2Path: string, jobId: string,) {
     try {
 
-      const latestUpload = await this.uploadLog.findOne().sort({ createdAt: -1 });
+      // Auto-cleanup stuck uploads older than 5 minutes
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      await this.uploadLog.updateMany(
+        {
+          status: 'Processing',
+          uploadedAt: { $lt: fiveMinutesAgo }
+        },
+        {
+          $set: {
+            status: 'Failed',
+            isProcessed: true,
+            remarks: 'Processing timeout - automatically failed after 5 minutes',
+            completedAt: new Date()
+          },
+          $push: {
+            log: {
+              description: 'Upload timed out after 5 minutes',
+              status: 'Failed',
+              errorDetail: 'Processing took too long and was automatically marked as failed'
+            }
+          }
+        }
+      );
 
-      if (latestUpload && !latestUpload.isProcessed) {
+      // Check for recent uploads (within last 5 minutes) that are still processing
+      const recentProcessingUpload = await this.uploadLog.findOne({ 
+        uploadedBy: userEmail,
+        status: 'Processing',
+        uploadedAt: { $gte: fiveMinutesAgo }
+      }).sort({ createdAt: -1 });
+
+      if (recentProcessingUpload) {
         throw new HttpException(
-          'Previous upload not processed yet, please try after sometime',
+          'Previous upload is still being processed, please try after sometime',
           HttpStatus.BAD_REQUEST
         );
       }
+
+      // Create upload log record before sending to microservice
+      const uploadLog = await this.uploadLog.create({
+        batchNo: jobId,
+        uploadedAt: new Date(),
+        raw_log_path: file1Path,
+        payment_log_path: file2Path,
+        status: 'Processing',
+        key: 'inputFiles',
+        uploadedBy: userEmail,
+        remarks: 'Files uploaded, processing started',
+        isProcessed: false,
+        log: [{
+          description: "Files sent to microservice for processing",
+          status: "Processing",
+          errorDetail: null
+        }]
+      });
+
       let body = {
         userEmail: userEmail,
         file1Path: `http://${process.env.API_HOST}:${process.env.API_PORT}/files/` + file1Path,
@@ -1981,7 +2031,7 @@ export class UploadService {
         if (record.lfiChargable && record.success) {
 
           if (record.group === "payment-bulk" && Boolean(record['raw_api_log_data.is_large_corporate'])) {
-
+            console.log("payment group is bulk large corporate");
             return {
               ...record,
               calculatedFee: parseFloat((parseInt(record["payment_logs.number_of_successful_transactions"] ?? 1) * this.variables.bulkLargeCorporatefee.value).toFixed(3)),
@@ -1998,20 +2048,18 @@ export class UploadService {
           if (record.type === "merchant") {
             if (record["raw_api_log_data.payment_type"] === 'LargeValueCollection') {
               if (record.group == 'payment-non-bulk') {
+                console.log("group is non-bulk and type in LargeValueCollection");
                 calculatedFee = this.variables.paymentLargeValueFee.value
                 applicableFee = calculatedFee
                 unit_price = this.variables.paymentLargeValueFee.value;
                 volume = 1;
               } else if (record.group == 'payment-bulk') {
-                calculatedFee = parseFloat((parseInt(record["payment_logs.number_of_successful_transactions"] ?? 1) * this.variables.paymentLargeValueFee.value).toFixed(3));
+console.log("group is bulk and type in LargeValueCollection");                calculatedFee = parseFloat((parseInt(record["payment_logs.number_of_successful_transactions"] ?? 1) * this.variables.paymentLargeValueFee.value).toFixed(3));
                 applicableFee = calculatedFee
                 unit_price = this.variables.paymentLargeValueFee.value;
                 volume = parseInt(record["payment_logs.number_of_successful_transactions"] ?? 1);
               }
-
-
             } else {
-
               const date = new Date(record["raw_api_log_data.timestamp"]).toISOString().split("T")[0];
               const key = `${record["payment_logs.merchant_id"]}_${date}`;
               const merchantGroup = merchantGroupedMap[key];
@@ -2019,15 +2067,14 @@ export class UploadService {
                 result = [merchantGroup]; // For consistency if needed in frontend
                 if (result.length > 0) {
                   merchantArray.push(merchantGroup);
-
                 }
                 const filteredTransaction = merchantGroup.transactions.find((t) =>
                   t.paymentId === record["payment_logs.payment_id"]
                 );
-
                 if (filteredTransaction) {
+                  console.log(`[FEE-CALC] merchant non-large-value: paymentId=${record["payment_logs.payment_id"]}, chargeableAmount=${filteredTransaction.chargeableAmount}, unit_price=${this.variables.nonLargeValueMerchantBps.value / 10000}`);
+                  console.log("the filter transaction is true");
                   calculatedFee = parseFloat((filteredTransaction.chargeableAmount * (this.variables.nonLargeValueMerchantBps.value / 10000)).toFixed(3));
-                  // applicableFee = parseFloat((parseInt(record["payment_logs.amount"]) > this.nonLargeValueCapMerchantCheck ? this.variables.nonLargeValueCapMerchant.value : calculatedFee).toFixed(3));
                   applicableFee = parseFloat((calculatedFee > this.variables.nonLargeValueCapMerchant.value ? this.variables.nonLargeValueCapMerchant.value : calculatedFee).toFixed(3));
                   unit_price = (this.variables.nonLargeValueMerchantBps.value / 10000);
                   volume = filteredTransaction.chargeableAmount ?? 0;
@@ -2035,9 +2082,10 @@ export class UploadService {
                   limitApplied = filteredTransaction.appliedLimit > 0;
                   isCapped = calculatedFee > this.variables.nonLargeValueCapMerchant.value; // Assign boolean value
                   cappedAt = isCapped ? this.variables.nonLargeValueCapMerchant.value : 0;
-
                 }
               } else {
+                console.log(`[FEE-CALC] merchant fallback: paymentId=${record["payment_logs.payment_id"]}, amount=${record["payment_logs.amount"]}, unit_price=${this.variables.nonLargeValueMerchantBps.value / 10000}`);
+                console.log("the filter transaction is false");
                 calculatedFee = parseFloat((parseInt(record["payment_logs.amount"]) * (this.variables.nonLargeValueMerchantBps.value / 10000)).toFixed(3));
                 applicableFee = parseFloat((calculatedFee > this.variables.nonLargeValueCapMerchant.value ? this.variables.nonLargeValueCapMerchant.value : calculatedFee).toFixed(3));
                 unit_price = (this.variables.nonLargeValueMerchantBps.value / 10000);
@@ -2099,17 +2147,17 @@ export class UploadService {
               
               if (numTransactions < this.variables.bulkPaymentMinTransactionThreshold.value) {
                 // Less than 10 transactions: flat fee of 250 fils
-                calculatedFee = parseFloat(this.variables.bulkPaymentFlatFeeBelow10.value.toFixed(3));
+                calculatedFee = parseFloat(this.variables.bulkPaymentFlatFeeBelow10MeToMe.value.toFixed(3));
                 applicableFee = calculatedFee;
-                unit_price = this.variables.bulkPaymentFlatFeeBelow10.value;
+                unit_price = this.variables.bulkPaymentFlatFeeBelow10MeToMe.value;
                 volume = 1;
                 isCapped = false;
                 cappedAt = 0;
               } else {
                 // 10 or more transactions: 25 fils per transaction
-                calculatedFee = parseFloat((numTransactions * this.variables.bulkPaymentPerTransactionFeeAbove10.value).toFixed(3));
+                calculatedFee = parseFloat((numTransactions * this.variables.bulkPaymentPerTFeeAbove10MeToMe.value).toFixed(3));
                 applicableFee = calculatedFee;
-                unit_price = this.variables.bulkPaymentPerTransactionFeeAbove10.value;
+                unit_price = this.variables.bulkPaymentPerTFeeAbove10MeToMe.value;
                 volume = numTransactions;
                 isCapped = false;
                 cappedAt = 0;
@@ -2291,7 +2339,7 @@ export class UploadService {
                 // Less than 10 transactions: flat fee of 250 fils
                 calculatedFee = parseFloat(this.variables.bulkPaymentFlatFeeBelow10.value.toFixed(3));
                 applicableFee = calculatedFee;
-                unit_price = this.variables.bulkPaymentFlatFeeBelow10.value;
+                unit_price = this.variables.bulkPaymentFlatFeeBelow10MeToMe.value;
                 volume = 1;
                 isCapped = false;
                 cappedAt = 0;
@@ -2299,7 +2347,7 @@ export class UploadService {
                 // 10 or more transactions: 25 fils per transaction
                 calculatedFee = parseFloat((numTransactions * this.variables.bulkPaymentPerTransactionFeeAbove10.value).toFixed(3));
                 applicableFee = calculatedFee;
-                unit_price = this.variables.bulkPaymentPerTransactionFeeAbove10.value;
+                unit_price = this.variables.bulkPaymentPerTFeeAbove10MeToMe.value;
                 volume = numTransactions;
                 isCapped = false;
                 cappedAt = 0;
