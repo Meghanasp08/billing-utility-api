@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+﻿import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import * as fs from "fs";
 // import * as moment from 'moment';
@@ -457,7 +457,7 @@ export class InvoiceService {
                                 }
                             ]
                         },
-                        then: "Large Value Collection"
+                        then: "Large value collection"
                     },
                     {
                         case: {
@@ -2292,7 +2292,7 @@ export class InvoiceService {
                                                 }
                                             ]
                                         },
-                                        then: "Large Value Collection"  // paymentLargeValueFee
+                                        then: "Large value collection"  // paymentLargeValueFee
                                     },
                                     {
                                         case: {
@@ -3068,7 +3068,7 @@ export class InvoiceService {
                                                             case: {
                                                                 $eq: [
                                                                     "$$labelItem.label",
-                                                                    "Large Value Collection"
+                                                                    "Large value collection"
                                                                 ]
                                                             },
                                                             then: "large_value_collection"
@@ -3347,7 +3347,7 @@ export class InvoiceService {
                                                 }
                                             ]
                                         },
-                                        then: "Large Value Collection"
+                                        then: "Large value collection"
                                     },
                                     {
                                         case: {
@@ -3899,7 +3899,7 @@ export class InvoiceService {
                                             }
                                         ]
                                     },
-                                    then: "Large Value Collection"
+                                    then: "Large value collection"
                                 },
                                 {
                                     case: {
@@ -4243,7 +4243,7 @@ export class InvoiceService {
                                                         case: {
                                                             $eq: [
                                                                 "$$labelItem.label",
-                                                                "Large Value Collection"
+                                                                "Large value collection"
                                                             ]
                                                         },
                                                         then: "large_value_collection"
@@ -4526,7 +4526,7 @@ export class InvoiceService {
                                             }
                                         ]
                                     },
-                                    then: "Large Value Collection"
+                                    then: "Large value collection"
                                 },
                                 {
                                     case: {
@@ -5222,7 +5222,7 @@ export class InvoiceService {
                                                 }
                                             ]
                                         },
-                                        then: "Large Value Collection"  // paymentLargeValueFee
+                                        then: "Large value collection"  // paymentLargeValueFee
                                     },
                                     {
                                         case: {
